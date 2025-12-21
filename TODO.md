@@ -7,7 +7,7 @@
 ## Phase 1: Foundation [COMPLETED]
 
 - [x] Initialize Turborepo with pnpm workspace
-- [x] Configure Next.js 16 with Tailwind + shadcn/ui
+- [x] Configure Next.js 16 with Tailwind CSS 4 + shadcn/ui
 - [x] Configure FastAPI backend structure
 - [x] Create Docker Compose setup (PostgreSQL, TimescaleDB, Redis, Celery)
 - [x] Create SQLAlchemy models (User, Strategy, Backtest, CurrencyPair, Candle)
@@ -151,6 +151,43 @@ This simulator exists to demonstrate that most technical analysis strategies:
 4. **Fail after transaction costs** - Spreads and commissions eat into "profits"
 
 The `/compare` endpoint is the educational core - it forces every strategy to be compared against these benchmarks and generates an honest conclusion.
+
+---
+
+## Tech Stack
+
+### Frontend (apps/web)
+| Package | Version |
+|---------|---------|
+| Next.js | ^16.1.0 |
+| React | ^19.2.0 |
+| Tailwind CSS | ^4.1.0 |
+| Zustand | ^5.0.0 |
+| TanStack Query | ^5.0.0 |
+| Recharts | ^3.6.0 |
+| Lightweight Charts | ^5.1.0 |
+| Lucide React | ^0.561.0 |
+| NextAuth | ^5.0.0 |
+
+### Backend (apps/api)
+| Package | Version |
+|---------|---------|
+| FastAPI | >=0.125.0 |
+| Uvicorn | >=0.39.0 |
+| Pydantic | >=2.12.0 |
+| SQLAlchemy | >=2.0.0 |
+| Celery | >=5.5.0 |
+| Redis | >=7.1.0 |
+| NumPy | >=2.2.0 |
+| Pandas | >=2.3.0 |
+| Python | >=3.11 |
+
+### Build Tools
+| Package | Version |
+|---------|---------|
+| Turborepo | ^2.7.0 |
+| pnpm | 9.0.0 |
+| TypeScript | ^5.7.0 |
 
 ---
 
