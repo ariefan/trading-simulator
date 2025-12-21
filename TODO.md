@@ -7,12 +7,12 @@
 ## Phase 1: Foundation [COMPLETED]
 
 - [x] Initialize Turborepo with pnpm workspace
-- [x] Configure Next.js 16 with Tailwind + shadcn/ui
+- [x] Configure Next.js 14 with Tailwind + shadcn/ui
 - [x] Configure FastAPI backend structure
 - [x] Create Docker Compose setup (PostgreSQL, TimescaleDB, Redis, Celery)
 - [x] Create SQLAlchemy models (User, Strategy, Backtest, CurrencyPair, Candle)
 - [x] Setup Alembic migrations
-- [x] Setup Google OAuth authentication (NextAuth v5)
+- [x] Setup Google OAuth authentication (NextAuth v5 frontend skeleton - backend verification not implemented)
 
 ---
 
@@ -20,11 +20,11 @@
 
 ### Backend (Completed)
 - [x] Strategy base class with indicator support
-- [x] Technical indicators library (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic, ADX)
+- [x] Technical indicators library (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic, ADX, OBV, VWAP, Pivot Points)
 - [x] Backtesting engine with simulated broker
 - [x] Performance metrics calculator (Sharpe, Sortino, Calmar, Max Drawdown, Win Rate)
-- [x] Historical data loaders (HistData, CSV)
-- [x] Data storage service for TimescaleDB
+- [x] Historical data loaders (CSV loader complete, HistData stub)
+- [x] Data storage service for TimescaleDB (structure only - uses synthetic data)
 - [x] Backtest service layer
 - [x] Built-in strategies:
   - [x] SMA Crossover
@@ -44,13 +44,15 @@
 - [x] Backtest results component with metrics display
 - [x] Equity curve visualization
 - [x] Trade list display
-- [x] API client with React Query hooks
+- [x] API client with React Query hooks (structure ready, uses mock data)
 
 ### Remaining
-- [ ] Wire frontend backtest page to call actual API (currently uses mock data)
+- [ ] Wire frontend backtest page to call actual API (currently uses mock data with setTimeout)
+- [ ] Implement Celery backtest task (currently placeholder with simulated progress)
 - [ ] Add "Compare with Random" button to UI
 - [ ] Display comparison conclusion in results
 - [ ] Add strategy code editor for custom strategies
+- [ ] Implement custom strategy CRUD endpoints (currently return 501)
 
 ---
 
@@ -88,6 +90,9 @@
 
 ## Infrastructure & Polish
 
+- [ ] Implement backend Google OAuth verification (auth.py returns 501)
+- [ ] Implement user profile endpoints (users.py returns 401)
+- [ ] Add real market data fetching (market.py returns empty data)
 - [ ] Add sample historical data download script
 - [ ] Create database seed script
 - [ ] Add unit tests for backtesting engine
@@ -122,14 +127,17 @@ pnpm --filter web dev
 
 ## Key Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/backtests/strategies` | GET | List available strategies |
-| `/api/v1/backtests/` | POST | Run a backtest |
-| `/api/v1/backtests/compare` | POST | Compare strategy vs Random & Buy-and-Hold |
-| `/api/v1/backtests/{id}` | GET | Get backtest results |
-| `/api/v1/market/pairs` | GET | List currency pairs |
-| `/api/v1/market/candles` | GET | Get OHLCV data |
+| Endpoint | Method | Description | Status |
+|----------|--------|-------------|--------|
+| `/api/v1/backtests/strategies` | GET | List available strategies | ✅ Working |
+| `/api/v1/backtests/` | POST | Run a backtest | ✅ Working |
+| `/api/v1/backtests/compare` | POST | Compare strategy vs Random & Buy-and-Hold | ✅ Working |
+| `/api/v1/backtests/{id}` | GET | Get backtest results | ✅ Working |
+| `/api/v1/market/pairs` | GET | List currency pairs | ⚠️ Stub |
+| `/api/v1/market/candles` | GET | Get OHLCV data | ⚠️ Stub (returns empty) |
+| `/api/v1/strategies/` | POST | Create custom strategy | ❌ 501 Not Implemented |
+| `/api/v1/auth/google` | POST | Google OAuth verification | ❌ 501 Not Implemented |
+| `/api/v1/users/me` | GET | Get current user | ❌ 401 (no auth) |
 
 ---
 
