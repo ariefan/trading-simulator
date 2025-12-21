@@ -7,7 +7,7 @@
 ## Phase 1: Foundation [COMPLETED]
 
 - [x] Initialize Turborepo with pnpm workspace
-- [x] Configure Next.js 14 with Tailwind + shadcn/ui
+- [x] Configure Next.js 16 with Tailwind + shadcn/ui
 - [x] Configure FastAPI backend structure
 - [x] Create Docker Compose setup (PostgreSQL, TimescaleDB, Redis, Celery)
 - [x] Create SQLAlchemy models (User, Strategy, Backtest, CurrencyPair, Candle)
