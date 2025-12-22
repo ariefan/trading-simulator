@@ -16,7 +16,7 @@
 
 ---
 
-## Phase 2: Backtesting System [IN PROGRESS - 90%]
+## Phase 2: Backtesting System [COMPLETED]
 
 ### Backend (Completed)
 - [x] Strategy base class with indicator support
@@ -37,6 +37,7 @@
   - [x] `POST /api/v1/backtests/` - Run backtest
   - [x] `POST /api/v1/backtests/compare` - Compare vs Random & Buy-and-Hold
   - [x] `GET /api/v1/backtests/{id}` - Get results
+- [x] Celery backtest task (runs actual backtest engine)
 
 ### Frontend (Completed)
 - [x] Candlestick chart component (TradingView Lightweight Charts)
@@ -44,13 +45,12 @@
 - [x] Backtest results component with metrics display
 - [x] Equity curve visualization
 - [x] Trade list display
-- [x] API client with React Query hooks (structure ready, uses mock data)
+- [x] API client with React Query hooks
+- [x] Frontend wired to actual backend API
+- [x] "Compare with Random & Buy-and-Hold" button
+- [x] Comparison results table with conclusion display
 
 ### Remaining
-- [ ] Wire frontend backtest page to call actual API (currently uses mock data with setTimeout)
-- [ ] Implement Celery backtest task (currently placeholder with simulated progress)
-- [ ] Add "Compare with Random" button to UI
-- [ ] Display comparison conclusion in results
 - [ ] Add strategy code editor for custom strategies
 - [ ] Implement custom strategy CRUD endpoints (currently return 501)
 

@@ -100,9 +100,18 @@ export const api = {
     list: () => request<Backtest[]>('/api/v1/backtests'),
     get: (id: string) => request<Backtest>(`/api/v1/backtests/${id}`),
     create: (data: CreateBacktestRequest) =>
-      request<Backtest>('/api/v1/backtests', {
+      request<any>('/api/v1/backtests', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          strategy_id: data.strategyId,
+          symbol: data.symbol,
+          timeframe: data.timeframe,
+          start_date: data.startDate,
+          end_date: data.endDate,
+          initial_balance: data.initialBalance,
+          leverage: data.leverage,
+          parameters: {},
+        }),
       }),
     getStatus: (id: string) =>
       request<BacktestStatus>(`/api/v1/backtests/${id}/status`),
@@ -215,6 +224,16 @@ export interface CreateBacktestRequest {
   endDate: string;
   initialBalance: number;
   leverage: number;
+}
+
+// Convert camelCase request to snake_case for backend
+function toSnakeCase(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key in obj) {
+    const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    result[snakeKey] = obj[key];
+  }
+  return result;
 }
 
 export interface BacktestStatus {

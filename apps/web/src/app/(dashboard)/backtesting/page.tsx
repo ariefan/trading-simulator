@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BacktestResults } from '@/components/backtesting/backtest-results';
+import { api } from '@/lib/api/client';
 
 const CURRENCY_PAIRS = [
   { value: 'EURUSD', label: 'EUR/USD' },
@@ -30,7 +31,6 @@ const STRATEGIES = [
   { value: 'sma-crossover', label: 'SMA Crossover' },
   { value: 'rsi-overbought', label: 'RSI Overbought/Oversold' },
   { value: 'macd-signal', label: 'MACD Signal' },
-  { value: 'custom', label: 'Custom Strategy' },
 ];
 
 interface BacktestConfig {
@@ -41,6 +41,27 @@ interface BacktestConfig {
   endDate: string;
   initialBalance: number;
   leverage: number;
+}
+
+interface ComparisonResult {
+  strategy_id: string;
+  strategy_name: string;
+  final_balance: number;
+  total_return_percent: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+  win_rate: number;
+  total_trades: number;
+  error: string | null;
+}
+
+interface ComparisonResponse {
+  symbol: string;
+  timeframe: string;
+  period: string;
+  initial_balance: number;
+  results: ComparisonResult[];
+  conclusion: string;
 }
 
 export default function BacktestingPage() {
@@ -55,36 +76,103 @@ export default function BacktestingPage() {
   });
 
   const [isRunning, setIsRunning] = useState(false);
+  const [isComparing, setIsComparing] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleRunBacktest = async () => {
     setIsRunning(true);
     setResults(null);
+    setComparison(null);
+    setError(null);
 
-    // Simulate backtest (replace with actual API call)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const response = await api.backtests.create({
+        strategyId: config.strategy,
+        symbol: config.symbol,
+        timeframe: config.timeframe,
+        startDate: config.startDate,
+        endDate: config.endDate,
+        initialBalance: config.initialBalance,
+        leverage: config.leverage,
+      });
 
-    // Mock results
-    setResults({
-      metrics: {
-        total_return_percent: 15.5,
-        sharpe_ratio: 1.85,
-        max_drawdown: 8.2,
-        win_rate: 58.3,
-        profit_factor: 1.72,
-        total_trades: 124,
-        winning_trades: 72,
-        losing_trades: 52,
-        average_win: 285.50,
-        average_loss: -165.30,
-        largest_win: 1250.00,
-        largest_loss: -520.00,
-      },
-      equity_curve: generateMockEquityCurve(config.initialBalance),
-      trades: generateMockTrades(),
-    });
+      // Transform API response to match BacktestResults component format
+      setResults({
+        metrics: {
+          total_return_percent: response.metrics?.total_return_percent || 0,
+          sharpe_ratio: response.metrics?.sharpe_ratio || 0,
+          max_drawdown: response.metrics?.max_drawdown || 0,
+          win_rate: response.metrics?.win_rate || 0,
+          profit_factor: response.metrics?.profit_factor || 0,
+          total_trades: response.metrics?.total_trades || 0,
+          winning_trades: response.metrics?.winning_trades || 0,
+          losing_trades: response.metrics?.losing_trades || 0,
+          average_win: response.metrics?.average_win || 0,
+          average_loss: response.metrics?.average_loss || 0,
+          largest_win: response.metrics?.largest_win || 0,
+          largest_loss: response.metrics?.largest_loss || 0,
+        },
+        equity_curve: response.equity_curve?.map((e: any) => ({
+          date: e.timestamp?.split('T')[0] || e.timestamp,
+          equity: e.equity,
+        })) || [],
+        trades: response.trades?.map((t: any) => ({
+          id: t.id,
+          side: t.side,
+          size: t.size,
+          entry_price: t.entry_price,
+          exit_price: t.exit_price,
+          pnl: t.pnl,
+          pnl_percent: t.pnl_percent,
+          entry_time: t.entry_time,
+          exit_time: t.exit_time,
+        })) || [],
+      });
+    } catch (err: any) {
+      setError(err.data?.detail || err.message || 'Failed to run backtest');
+    } finally {
+      setIsRunning(false);
+    }
+  };
 
-    setIsRunning(false);
+  const handleCompare = async () => {
+    setIsComparing(true);
+    setComparison(null);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/backtests/compare`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy_id: config.strategy,
+            symbol: config.symbol,
+            timeframe: config.timeframe,
+            start_date: config.startDate,
+            end_date: config.endDate,
+            initial_balance: config.initialBalance,
+            leverage: config.leverage,
+            parameters: {},
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Comparison failed');
+      }
+
+      const data: ComparisonResponse = await response.json();
+      setComparison(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to compare strategies');
+    } finally {
+      setIsComparing(false);
+    }
   };
 
   return (
@@ -207,28 +295,117 @@ export default function BacktestingPage() {
               </select>
             </div>
 
-            <Button
-              className="w-full"
-              onClick={handleRunBacktest}
-              disabled={isRunning}
-            >
-              {isRunning ? (
-                <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  Running Backtest...
-                </>
-              ) : (
-                'Run Backtest'
-              )}
-            </Button>
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                onClick={handleRunBacktest}
+                disabled={isRunning || isComparing}
+              >
+                {isRunning ? 'Running Backtest...' : 'Run Backtest'}
+              </Button>
+
+              <Button
+                className="w-full"
+                variant="secondary"
+                onClick={handleCompare}
+                disabled={isRunning || isComparing}
+              >
+                {isComparing ? 'Comparing...' : 'Compare with Random & Buy-and-Hold'}
+              </Button>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300 text-sm">
+                {error}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Results Panel */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Comparison Results */}
+          {comparison && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Strategy Comparison</CardTitle>
+                <CardDescription>
+                  {comparison.period} on {comparison.symbol}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Comparison Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 font-medium">Strategy</th>
+                        <th className="text-right py-2 font-medium">Return</th>
+                        <th className="text-right py-2 font-medium">Sharpe</th>
+                        <th className="text-right py-2 font-medium">Max DD</th>
+                        <th className="text-right py-2 font-medium">Win Rate</th>
+                        <th className="text-right py-2 font-medium">Trades</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparison.results.map((result, idx) => (
+                        <tr
+                          key={result.strategy_id}
+                          className={`border-b ${
+                            result.strategy_id === config.strategy
+                              ? 'bg-primary/5 font-medium'
+                              : ''
+                          }`}
+                        >
+                          <td className="py-2">
+                            {idx === 0 && '🏆 '}
+                            {result.strategy_name}
+                          </td>
+                          <td
+                            className={`text-right py-2 ${
+                              result.total_return_percent >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}
+                          >
+                            {result.total_return_percent >= 0 ? '+' : ''}
+                            {result.total_return_percent.toFixed(2)}%
+                          </td>
+                          <td className="text-right py-2">
+                            {result.sharpe_ratio.toFixed(2)}
+                          </td>
+                          <td className="text-right py-2 text-red-600">
+                            -{result.max_drawdown.toFixed(2)}%
+                          </td>
+                          <td className="text-right py-2">
+                            {result.win_rate.toFixed(1)}%
+                          </td>
+                          <td className="text-right py-2">{result.total_trades}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Conclusion */}
+                <div
+                  className={`p-4 rounded-md ${
+                    comparison.conclusion.includes('LOST')
+                      ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                      : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  }`}
+                >
+                  <p className="font-medium mb-1">Reality Check</p>
+                  <p className="text-sm">{comparison.conclusion}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Backtest Results */}
           {results ? (
             <BacktestResults results={results} config={config} />
-          ) : (
+          ) : !comparison ? (
             <Card className="h-full flex items-center justify-center min-h-[400px]">
               <CardContent className="text-center">
                 <div className="text-6xl mb-4">📊</div>
@@ -236,58 +413,15 @@ export default function BacktestingPage() {
                 <p className="text-muted-foreground">
                   Configure your backtest parameters and click "Run Backtest" to see results.
                 </p>
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Or click "Compare with Random & Buy-and-Hold" to see if your strategy
+                  actually works.
+                </p>
               </CardContent>
             </Card>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
-}
-
-// Helper functions to generate mock data
-function generateMockEquityCurve(initialBalance: number) {
-  const points = [];
-  let equity = initialBalance;
-  const startDate = new Date('2023-01-01');
-
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-
-    // Random walk with slight upward bias
-    const change = (Math.random() - 0.48) * 0.02 * equity;
-    equity += change;
-
-    points.push({
-      date: date.toISOString().split('T')[0],
-      equity: Math.round(equity * 100) / 100,
-    });
-  }
-
-  return points;
-}
-
-function generateMockTrades() {
-  const trades = [];
-  const sides = ['long', 'short'];
-
-  for (let i = 0; i < 20; i++) {
-    const side = sides[Math.floor(Math.random() * 2)];
-    const pnl = (Math.random() - 0.4) * 500;
-
-    trades.push({
-      id: `trade-${i + 1}`,
-      side,
-      size: 0.1,
-      entry_price: 1.1 + Math.random() * 0.01,
-      exit_price: 1.1 + Math.random() * 0.01,
-      pnl: Math.round(pnl * 100) / 100,
-      pnl_percent: Math.round((pnl / 1000) * 10000) / 100,
-      entry_time: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toISOString(),
-      exit_time: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toISOString(),
-    });
-  }
-
-  return trades;
 }
