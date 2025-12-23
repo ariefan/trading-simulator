@@ -1,69 +1,149 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MiniChart } from '@/components/charts/candlestick-chart';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
-interface PortfolioStats {
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+interface PortfolioData {
   balance: number;
   equity: number;
   margin: number;
-  freeMargin: number;
-  marginLevel: number;
-  dailyPnl: number;
-  weeklyPnl: number;
-  monthlyPnl: number;
-  allTimePnl: number;
+  free_margin: number;
+  margin_level: number | null;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  total_pnl: number;
+  total_pnl_percent: number;
 }
 
-const MOCK_STATS: PortfolioStats = {
-  balance: 105432.50,
-  equity: 106789.25,
-  margin: 2500.00,
-  freeMargin: 104289.25,
-  marginLevel: 4271.57,
-  dailyPnl: 432.50,
-  weeklyPnl: 1876.25,
-  monthlyPnl: 5432.50,
-  allTimePnl: 6789.25,
-};
+interface PortfolioSnapshot {
+  timestamp: string;
+  balance: number;
+  equity: number;
+}
 
-const MOCK_EQUITY_HISTORY = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - (30 - i));
-  return {
-    time: date.toISOString().slice(0, 10),
-    open: 100000 + i * 200 + Math.random() * 500,
-    high: 100000 + i * 200 + Math.random() * 800,
-    low: 100000 + i * 200 - Math.random() * 300,
-    close: 100000 + i * 200 + Math.random() * 600,
-  };
-});
+interface PerformanceMetrics {
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  profit_factor: number;
+  average_win: number;
+  average_loss: number;
+  largest_win: number;
+  largest_loss: number;
+  average_trade: number;
+  total_pnl: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+}
 
-const MOCK_MONTHLY_RETURNS = [
-  { month: 'Jan', return: 2.5 },
-  { month: 'Feb', return: -1.2 },
-  { month: 'Mar', return: 3.8 },
-  { month: 'Apr', return: 1.5 },
-  { month: 'May', return: -0.8 },
-  { month: 'Jun', return: 4.2 },
-  { month: 'Jul', return: 2.1 },
-  { month: 'Aug', return: -2.5 },
-  { month: 'Sep', return: 3.2 },
-  { month: 'Oct', return: 1.8 },
-  { month: 'Nov', return: 2.9 },
-  { month: 'Dec', return: 1.5 },
-];
-
-const MOCK_ALLOCATION = [
-  { pair: 'EUR/USD', percentage: 35, pnl: 2340 },
-  { pair: 'GBP/USD', percentage: 25, pnl: 1560 },
-  { pair: 'USD/JPY', percentage: 20, pnl: -890 },
-  { pair: 'AUD/USD', percentage: 12, pnl: 780 },
-  { pair: 'USD/CHF', percentage: 8, pnl: 450 },
-];
+interface AllocationItem {
+  symbol: string;
+  side: string;
+  size: number;
+  margin_used: number;
+  unrealized_pnl: number;
+  allocation_percent: number;
+}
 
 export default function PortfolioPage() {
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const [history, setHistory] = useState<PortfolioSnapshot[]>([]);
+  const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
+  const [allocation, setAllocation] = useState<AllocationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [portfolioRes, historyRes, metricsRes, allocationRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/v1/portfolio/`),
+          fetch(`${API_BASE_URL}/api/v1/portfolio/history?days=30`),
+          fetch(`${API_BASE_URL}/api/v1/portfolio/metrics`),
+          fetch(`${API_BASE_URL}/api/v1/portfolio/allocation`),
+        ]);
+
+        if (!portfolioRes.ok) throw new Error('Failed to fetch portfolio');
+        if (!historyRes.ok) throw new Error('Failed to fetch history');
+        if (!metricsRes.ok) throw new Error('Failed to fetch metrics');
+        if (!allocationRes.ok) throw new Error('Failed to fetch allocation');
+
+        const [portfolioData, historyData, metricsData, allocationData] = await Promise.all([
+          portfolioRes.json(),
+          historyRes.json(),
+          metricsRes.json(),
+          allocationRes.json(),
+        ]);
+
+        setPortfolio(portfolioData);
+        setHistory(historyData);
+        setMetrics(metricsData);
+        setAllocation(allocationData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load portfolio data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Convert history to chart format
+  const equityChartData = history.map((snapshot) => {
+    const date = new Date(snapshot.timestamp);
+    return {
+      time: date.toISOString().slice(0, 10),
+      open: snapshot.equity,
+      high: snapshot.equity * 1.001,
+      low: snapshot.equity * 0.999,
+      close: snapshot.equity,
+    };
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Portfolio</h1>
+          <p className="text-muted-foreground">
+            Track your trading performance and portfolio allocation
+          </p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-red-500">Error: {error}</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Make sure the API server is running at {API_BASE_URL}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const isPositive = (portfolio?.total_pnl || 0) >= 0;
+
   return (
     <div className="space-y-6">
       <div>
@@ -78,38 +158,43 @@ export default function PortfolioPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Balance</p>
-            <p className="text-2xl font-bold">{formatCurrency(MOCK_STATS.balance)}</p>
-            <p className="text-sm text-green-600">
-              +{formatCurrency(MOCK_STATS.dailyPnl)} today
+            <p className="text-2xl font-bold">{formatCurrency(portfolio?.balance || 0)}</p>
+            <p className="text-sm text-muted-foreground">
+              Realized P&L: <span className={portfolio?.realized_pnl && portfolio.realized_pnl >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {portfolio?.realized_pnl && portfolio.realized_pnl >= 0 ? '+' : ''}{formatCurrency(portfolio?.realized_pnl || 0)}
+              </span>
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Equity</p>
-            <p className="text-2xl font-bold">{formatCurrency(MOCK_STATS.equity)}</p>
+            <p className="text-2xl font-bold">{formatCurrency(portfolio?.equity || 0)}</p>
             <p className="text-sm text-muted-foreground">
-              Floating P&L: {formatCurrency(MOCK_STATS.equity - MOCK_STATS.balance)}
+              Floating P&L: <span className={portfolio?.unrealized_pnl && portfolio.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {portfolio?.unrealized_pnl && portfolio.unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(portfolio?.unrealized_pnl || 0)}
+              </span>
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Free Margin</p>
-            <p className="text-2xl font-bold">{formatCurrency(MOCK_STATS.freeMargin)}</p>
+            <p className="text-2xl font-bold">{formatCurrency(portfolio?.free_margin || 0)}</p>
             <p className="text-sm text-muted-foreground">
-              Used: {formatCurrency(MOCK_STATS.margin)}
+              Used: {formatCurrency(portfolio?.margin || 0)}
+              {portfolio?.margin_level && ` (${portfolio.margin_level.toFixed(0)}%)`}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">All-Time P&L</p>
-            <p className="text-2xl font-bold text-green-600">
-              +{formatCurrency(MOCK_STATS.allTimePnl)}
+            <p className="text-sm text-muted-foreground">Total P&L</p>
+            <p className={`text-2xl font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+              {isPositive ? '+' : ''}{formatCurrency(portfolio?.total_pnl || 0)}
             </p>
             <p className="text-sm text-muted-foreground">
-              +{formatPercentage((MOCK_STATS.allTimePnl / 100000) * 100)}
+              {isPositive ? '+' : ''}{formatPercentage(portfolio?.total_pnl_percent || 0)}
             </p>
           </CardContent>
         </Card>
@@ -123,77 +208,105 @@ export default function PortfolioPage() {
         </CardHeader>
         <CardContent>
           <div className="h-48">
-            <MiniChart data={MOCK_EQUITY_HISTORY} height={192} isPositive />
+            {equityChartData.length > 0 ? (
+              <MiniChart data={equityChartData} height={192} isPositive={isPositive} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No historical data available
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Monthly Returns */}
+        {/* Performance Summary */}
         <Card>
           <CardHeader>
-            <CardTitle>Monthly Returns</CardTitle>
-            <CardDescription>Performance by month (2024)</CardDescription>
+            <CardTitle>Trade Summary</CardTitle>
+            <CardDescription>Win/Loss statistics</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-2">
-              {MOCK_MONTHLY_RETURNS.map((item) => (
-                <div
-                  key={item.month}
-                  className={`p-3 rounded-md text-center ${
-                    item.return >= 0 ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'
-                  }`}
-                >
-                  <p className="text-xs text-muted-foreground">{item.month}</p>
-                  <p
-                    className={`font-semibold ${
-                      item.return >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {item.return >= 0 ? '+' : ''}
-                    {item.return.toFixed(1)}%
-                  </p>
+            {metrics && metrics.total_trades > 0 ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Total Trades</span>
+                  <span className="font-bold">{metrics.total_trades}</span>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Winning Trades</span>
+                  <span className="font-bold text-green-600">{metrics.winning_trades}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Losing Trades</span>
+                  <span className="font-bold text-red-600">{metrics.losing_trades}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Win Rate</span>
+                  <span className="font-bold">{metrics.win_rate.toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Average Win</span>
+                  <span className="font-bold text-green-600">+{formatCurrency(metrics.average_win)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Average Loss</span>
+                  <span className="font-bold text-red-600">-{formatCurrency(metrics.average_loss)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                No trades yet. Start trading to see statistics.
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Currency Allocation */}
         <Card>
           <CardHeader>
-            <CardTitle>Currency Allocation</CardTitle>
-            <CardDescription>Trading activity by currency pair</CardDescription>
+            <CardTitle>Position Allocation</CardTitle>
+            <CardDescription>Current open positions by margin usage</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {MOCK_ALLOCATION.map((item) => (
-              <div key={item.pair} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{item.pair}</span>
-                  <div className="flex items-center gap-4">
-                    <span
-                      className={`text-sm font-medium ${
-                        item.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+            {allocation.length > 0 ? (
+              allocation.map((item) => (
+                <div key={`${item.symbol}-${item.side}`} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">
+                      {item.symbol} <span className={`text-xs ${item.side === 'long' ? 'text-green-600' : 'text-red-600'}`}>
+                        ({item.side.toUpperCase()})
+                      </span>
+                    </span>
+                    <div className="flex items-center gap-4">
+                      <span
+                        className={`text-sm font-medium ${
+                          item.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}
+                      >
+                        {item.unrealized_pnl >= 0 ? '+' : ''}
+                        {formatCurrency(item.unrealized_pnl)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {item.allocation_percent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        item.unrealized_pnl >= 0 ? 'bg-green-500' : 'bg-red-500'
                       }`}
-                    >
-                      {item.pnl >= 0 ? '+' : ''}
-                      {formatCurrency(item.pnl)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {item.percentage}%
-                    </span>
+                      style={{ width: `${item.allocation_percent}%` }}
+                    />
                   </div>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${
-                      item.pnl >= 0 ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${item.percentage}%` }}
-                  />
-                </div>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                No open positions. Open a trade to see allocation.
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       </div>
@@ -208,35 +321,37 @@ export default function PortfolioPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">Total Trades</p>
-              <p className="text-2xl font-bold">247</p>
+              <p className="text-2xl font-bold">{metrics?.total_trades || 0}</p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">Win Rate</p>
-              <p className="text-2xl font-bold">58.3%</p>
+              <p className="text-2xl font-bold">{(metrics?.win_rate || 0).toFixed(1)}%</p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">Profit Factor</p>
-              <p className="text-2xl font-bold">1.72</p>
+              <p className="text-2xl font-bold">{(metrics?.profit_factor || 0).toFixed(2)}</p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">Avg Trade Duration</p>
-              <p className="text-2xl font-bold">4.2h</p>
+              <p className="text-sm text-muted-foreground">Average Trade</p>
+              <p className={`text-2xl font-bold ${(metrics?.average_trade || 0) >= 0 ? '' : 'text-red-600'}`}>
+                {(metrics?.average_trade || 0) >= 0 ? '+' : ''}{formatCurrency(metrics?.average_trade || 0)}
+              </p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">Sharpe Ratio</p>
-              <p className="text-2xl font-bold">1.85</p>
+              <p className="text-2xl font-bold">{(metrics?.sharpe_ratio || 0).toFixed(2)}</p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">Max Drawdown</p>
-              <p className="text-2xl font-bold text-red-600">-8.2%</p>
+              <p className="text-2xl font-bold text-red-600">-{(metrics?.max_drawdown || 0).toFixed(2)}%</p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">Best Trade</p>
-              <p className="text-2xl font-bold text-green-600">+$1,250</p>
+              <p className="text-sm text-muted-foreground">Largest Win</p>
+              <p className="text-2xl font-bold text-green-600">+{formatCurrency(metrics?.largest_win || 0)}</p>
             </div>
             <div className="space-y-1 p-4 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">Worst Trade</p>
-              <p className="text-2xl font-bold text-red-600">-$520</p>
+              <p className="text-sm text-muted-foreground">Largest Loss</p>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(metrics?.largest_loss || 0)}</p>
             </div>
           </div>
         </CardContent>

@@ -61,7 +61,7 @@
 
 ---
 
-## Phase 3: Paper Trading [60%]
+## Phase 3: Paper Trading [90%]
 
 ### Frontend (Completed)
 - [x] Trading page UI with order form
@@ -71,14 +71,31 @@
 - [x] Trade history page
 - [x] Settings page
 - [x] Help page
+- [x] Frontend wired to actual trading API
+- [x] Frontend wired to actual portfolio API
 
-### Backend (Not Started)
-- [ ] Trading engine
-- [ ] Order manager (market, limit, stop-loss, take-profit)
-- [ ] Position manager
-- [ ] Margin calculator
+### Backend (Mostly Complete)
+- [x] Trading engine (in-memory state management)
+- [x] Order manager (market, limit, stop-loss, take-profit)
+- [x] Position manager with P&L calculation
+- [x] Margin calculator (leverage-based)
+- [x] Portfolio tracking API (summary, history, metrics, allocation)
 - [ ] WebSocket for real-time price updates
-- [ ] Portfolio tracking API
+
+### API Endpoints (Trading)
+- [x] `POST /api/v1/trading/orders` - Place order
+- [x] `GET /api/v1/trading/orders` - List orders
+- [x] `DELETE /api/v1/trading/orders/{id}` - Cancel order
+- [x] `GET /api/v1/trading/positions` - List positions
+- [x] `POST /api/v1/trading/positions/{id}/close` - Close position
+- [x] `GET /api/v1/trading/history` - Trade history
+- [x] `POST /api/v1/trading/reset` - Reset account
+
+### API Endpoints (Portfolio)
+- [x] `GET /api/v1/portfolio/` - Portfolio summary
+- [x] `GET /api/v1/portfolio/history` - Equity history
+- [x] `GET /api/v1/portfolio/metrics` - Performance metrics
+- [x] `GET /api/v1/portfolio/allocation` - Position allocation
 
 ---
 
@@ -142,6 +159,15 @@ pnpm --filter web dev
 | `/api/v1/strategies/` | POST | Create custom strategy | ✅ Working |
 | `/api/v1/strategies/{id}` | GET/PUT/DELETE | Strategy CRUD | ✅ Working |
 | `/api/v1/strategies/templates` | GET | Get strategy templates | ✅ Working |
+| `/api/v1/trading/orders` | GET/POST | List/Place orders | ✅ Working |
+| `/api/v1/trading/orders/{id}` | DELETE | Cancel order | ✅ Working |
+| `/api/v1/trading/positions` | GET | List open positions | ✅ Working |
+| `/api/v1/trading/positions/{id}/close` | POST | Close position | ✅ Working |
+| `/api/v1/trading/history` | GET | Trade history | ✅ Working |
+| `/api/v1/portfolio/` | GET | Portfolio summary | ✅ Working |
+| `/api/v1/portfolio/history` | GET | Equity history | ✅ Working |
+| `/api/v1/portfolio/metrics` | GET | Performance metrics | ✅ Working |
+| `/api/v1/portfolio/allocation` | GET | Position allocation | ✅ Working |
 | `/api/v1/market/pairs` | GET | List currency pairs | ⚠️ Stub |
 | `/api/v1/market/candles` | GET | Get OHLCV data | ⚠️ Stub (returns empty) |
 | `/api/v1/auth/google` | POST | Google OAuth verification | ❌ 501 Not Implemented |

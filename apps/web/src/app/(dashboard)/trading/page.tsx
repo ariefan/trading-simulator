@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,16 @@ import { Separator } from '@/components/ui/separator';
 import { CandlestickChart } from '@/components/charts/candlestick-chart';
 import { formatCurrency } from '@/lib/utils';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 const CURRENCY_PAIRS = [
-  { symbol: 'EURUSD', name: 'EUR/USD', price: 1.0876, change: 0.0012 },
-  { symbol: 'GBPUSD', name: 'GBP/USD', price: 1.2654, change: -0.0008 },
-  { symbol: 'USDJPY', name: 'USD/JPY', price: 149.32, change: 0.45 },
-  { symbol: 'USDCHF', name: 'USD/CHF', price: 0.8823, change: -0.0015 },
-  { symbol: 'AUDUSD', name: 'AUD/USD', price: 0.6578, change: 0.0023 },
+  { symbol: 'EURUSD', name: 'EUR/USD', basePrice: 1.0850 },
+  { symbol: 'GBPUSD', name: 'GBP/USD', basePrice: 1.2650 },
+  { symbol: 'USDJPY', name: 'USD/JPY', basePrice: 149.50 },
+  { symbol: 'USDCHF', name: 'USD/CHF', basePrice: 0.8750 },
+  { symbol: 'AUDUSD', name: 'AUD/USD', basePrice: 0.6550 },
+  { symbol: 'USDCAD', name: 'USD/CAD', basePrice: 1.3550 },
+  { symbol: 'NZDUSD', name: 'NZD/USD', basePrice: 0.6150 },
 ];
 
 interface Position {
@@ -22,34 +26,21 @@ interface Position {
   symbol: string;
   side: 'long' | 'short';
   size: number;
-  entryPrice: number;
-  currentPrice: number;
-  pnl: number;
-  pnlPercent: number;
+  entry_price: number;
+  current_price: number;
+  unrealized_pnl: number;
+  unrealized_pnl_percent: number;
+  stop_loss?: number;
+  take_profit?: number;
+  margin_used: number;
+  opened_at: string;
 }
 
-const MOCK_POSITIONS: Position[] = [
-  {
-    id: '1',
-    symbol: 'EURUSD',
-    side: 'long',
-    size: 0.5,
-    entryPrice: 1.0850,
-    currentPrice: 1.0876,
-    pnl: 130,
-    pnlPercent: 1.3,
-  },
-  {
-    id: '2',
-    symbol: 'GBPUSD',
-    side: 'short',
-    size: 0.3,
-    entryPrice: 1.2680,
-    currentPrice: 1.2654,
-    pnl: 78,
-    pnlPercent: 0.78,
-  },
-];
+interface PairPrice {
+  symbol: string;
+  price: number;
+  change: number;
+}
 
 function generateMockCandles(symbol: string): Array<{
   time: string;
@@ -60,7 +51,8 @@ function generateMockCandles(symbol: string): Array<{
   volume: number;
 }> {
   const candles = [];
-  const basePrice = symbol === 'EURUSD' ? 1.08 : symbol === 'GBPUSD' ? 1.26 : 149;
+  const pair = CURRENCY_PAIRS.find((p) => p.symbol === symbol);
+  const basePrice = pair?.basePrice || 1.0;
   let price = basePrice;
   const now = new Date();
 
@@ -91,13 +83,16 @@ function generateMockCandles(symbol: string): Array<{
 
 export default function TradingPage() {
   const [selectedPair, setSelectedPair] = useState(CURRENCY_PAIRS[0]);
-  const [positions] = useState<Position[]>(MOCK_POSITIONS);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [prices, setPrices] = useState<PairPrice[]>([]);
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
   const [orderSize, setOrderSize] = useState('0.1');
   const [limitPrice, setLimitPrice] = useState('');
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const chartData = useMemo(
     () => generateMockCandles(selectedPair.symbol),
@@ -106,23 +101,112 @@ export default function TradingPage() {
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(interval);
+  // Fetch positions
+  const fetchPositions = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/trading/positions`);
+      if (response.ok) {
+        const data = await response.json();
+        setPositions(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch positions:', err);
+    }
   }, []);
 
-  const totalPnl = positions.reduce((sum, p) => sum + p.pnl, 0);
+  // Generate simulated prices
+  const updatePrices = useCallback(() => {
+    setPrices(
+      CURRENCY_PAIRS.map((pair) => {
+        const change = (Math.random() - 0.5) * 0.002;
+        return {
+          symbol: pair.symbol,
+          price: pair.basePrice + pair.basePrice * change,
+          change: pair.basePrice * change,
+        };
+      })
+    );
+  }, []);
 
-  const handlePlaceOrder = () => {
-    console.log('Placing order:', {
-      symbol: selectedPair.symbol,
-      type: orderType,
-      side: orderSide,
-      size: parseFloat(orderSize),
-      limitPrice: limitPrice ? parseFloat(limitPrice) : undefined,
-      stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
-      takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
-    });
+  useEffect(() => {
+    fetchPositions();
+    updatePrices();
+
+    const positionInterval = setInterval(fetchPositions, 5000);
+    const priceInterval = setInterval(updatePrices, 2000);
+    const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+
+    return () => {
+      clearInterval(positionInterval);
+      clearInterval(priceInterval);
+      clearInterval(timeInterval);
+    };
+  }, [fetchPositions, updatePrices]);
+
+  const totalPnl = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0);
+
+  const handlePlaceOrder = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/trading/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: selectedPair.symbol,
+          side: orderSide,
+          type: orderType,
+          size: parseFloat(orderSize),
+          price: limitPrice ? parseFloat(limitPrice) : undefined,
+          stop_loss: stopLoss ? parseFloat(stopLoss) : undefined,
+          take_profit: takeProfit ? parseFloat(takeProfit) : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to place order');
+      }
+
+      // Refresh positions
+      await fetchPositions();
+
+      // Reset form
+      setOrderSize('0.1');
+      setLimitPrice('');
+      setStopLoss('');
+      setTakeProfit('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to place order');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClosePosition = async (positionId: string) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/trading/positions/${positionId}/close`,
+        { method: 'POST' }
+      );
+
+      if (response.ok) {
+        await fetchPositions();
+      }
+    } catch (err) {
+      console.error('Failed to close position:', err);
+    }
+  };
+
+  const getCurrentPrice = (symbol: string) => {
+    const priceData = prices.find((p) => p.symbol === symbol);
+    return priceData?.price || CURRENCY_PAIRS.find((p) => p.symbol === symbol)?.basePrice || 0;
+  };
+
+  const getPriceChange = (symbol: string) => {
+    const priceData = prices.find((p) => p.symbol === symbol);
+    return priceData?.change || 0;
   };
 
   return (
@@ -140,6 +224,15 @@ export default function TradingPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300 text-sm">
+          {error}
+          <button className="ml-2 underline" onClick={() => setError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-4">
         {/* Watchlist */}
         <Card className="lg:col-span-1">
@@ -147,30 +240,34 @@ export default function TradingPage() {
             <CardTitle className="text-base">Watchlist</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 p-2">
-            {CURRENCY_PAIRS.map((pair) => (
-              <button
-                key={pair.symbol}
-                onClick={() => setSelectedPair(pair)}
-                className={`w-full flex items-center justify-between p-2 rounded-md transition-colors ${
-                  selectedPair.symbol === pair.symbol
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
-                }`}
-              >
-                <span className="font-medium">{pair.name}</span>
-                <div className="text-right">
-                  <p className="font-mono text-sm">{pair.price.toFixed(4)}</p>
-                  <p
-                    className={`text-xs ${
-                      pair.change >= 0 ? 'text-green-500' : 'text-red-500'
-                    }`}
-                  >
-                    {pair.change >= 0 ? '+' : ''}
-                    {pair.change.toFixed(4)}
-                  </p>
-                </div>
-              </button>
-            ))}
+            {CURRENCY_PAIRS.map((pair) => {
+              const price = getCurrentPrice(pair.symbol);
+              const change = getPriceChange(pair.symbol);
+              return (
+                <button
+                  key={pair.symbol}
+                  onClick={() => setSelectedPair(pair)}
+                  className={`w-full flex items-center justify-between p-2 rounded-md transition-colors ${
+                    selectedPair.symbol === pair.symbol
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  <span className="font-medium">{pair.name}</span>
+                  <div className="text-right">
+                    <p className="font-mono text-sm">{price.toFixed(4)}</p>
+                    <p
+                      className={`text-xs ${
+                        change >= 0 ? 'text-green-500' : 'text-red-500'
+                      }`}
+                    >
+                      {change >= 0 ? '+' : ''}
+                      {change.toFixed(4)}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -264,7 +361,7 @@ export default function TradingPage() {
                   id="limitPrice"
                   type="number"
                   step="0.0001"
-                  placeholder={selectedPair.price.toFixed(4)}
+                  placeholder={getCurrentPrice(selectedPair.symbol).toFixed(4)}
                   value={limitPrice}
                   onChange={(e) => setLimitPrice(e.target.value)}
                 />
@@ -306,8 +403,11 @@ export default function TradingPage() {
                   : 'bg-red-600 hover:bg-red-700'
               }`}
               onClick={handlePlaceOrder}
+              disabled={isLoading}
             >
-              {orderSide === 'buy' ? 'Buy' : 'Sell'} {selectedPair.name}
+              {isLoading
+                ? 'Placing Order...'
+                : `${orderSide === 'buy' ? 'Buy' : 'Sell'} ${selectedPair.name}`}
             </Button>
           </CardContent>
         </Card>
@@ -365,22 +465,26 @@ export default function TradingPage() {
                         </span>
                       </td>
                       <td className="py-3">{position.size} lots</td>
-                      <td className="py-3 font-mono">{position.entryPrice.toFixed(4)}</td>
-                      <td className="py-3 font-mono">{position.currentPrice.toFixed(4)}</td>
+                      <td className="py-3 font-mono">{position.entry_price.toFixed(4)}</td>
+                      <td className="py-3 font-mono">{position.current_price.toFixed(4)}</td>
                       <td
                         className={`py-3 text-right font-medium ${
-                          position.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                          position.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'
                         }`}
                       >
-                        {position.pnl >= 0 ? '+' : ''}
-                        {formatCurrency(position.pnl)}
+                        {position.unrealized_pnl >= 0 ? '+' : ''}
+                        {formatCurrency(position.unrealized_pnl)}
                         <span className="text-xs ml-1">
-                          ({position.pnlPercent >= 0 ? '+' : ''}
-                          {position.pnlPercent.toFixed(2)}%)
+                          ({position.unrealized_pnl_percent >= 0 ? '+' : ''}
+                          {position.unrealized_pnl_percent.toFixed(2)}%)
                         </span>
                       </td>
                       <td className="py-3 text-right">
-                        <Button variant="outline" size="sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleClosePosition(position.id)}
+                        >
                           Close
                         </Button>
                       </td>
