@@ -61,11 +61,11 @@
 
 ---
 
-## Phase 3: Paper Trading [90%]
+## Phase 3: Paper Trading [COMPLETED]
 
 ### Frontend (Completed)
 - [x] Trading page UI with order form
-- [x] Watchlist component
+- [x] Watchlist component with live bid/ask prices
 - [x] Open positions table
 - [x] Portfolio page with equity curve
 - [x] Trade history page
@@ -73,14 +73,15 @@
 - [x] Help page
 - [x] Frontend wired to actual trading API
 - [x] Frontend wired to actual portfolio API
+- [x] WebSocket client with auto-reconnect
 
-### Backend (Mostly Complete)
+### Backend (Completed)
 - [x] Trading engine (in-memory state management)
 - [x] Order manager (market, limit, stop-loss, take-profit)
 - [x] Position manager with P&L calculation
 - [x] Margin calculator (leverage-based)
 - [x] Portfolio tracking API (summary, history, metrics, allocation)
-- [ ] WebSocket for real-time price updates
+- [x] WebSocket for real-time price updates (simulated tick data)
 
 ### API Endpoints (Trading)
 - [x] `POST /api/v1/trading/orders` - Place order
@@ -96,6 +97,9 @@
 - [x] `GET /api/v1/portfolio/history` - Equity history
 - [x] `GET /api/v1/portfolio/metrics` - Performance metrics
 - [x] `GET /api/v1/portfolio/allocation` - Position allocation
+
+### WebSocket Endpoints
+- [x] `WS /api/v1/ws/prices` - Real-time price feed (subscribe/unsubscribe)
 
 ---
 
@@ -168,6 +172,7 @@ pnpm --filter web dev
 | `/api/v1/portfolio/history` | GET | Equity history | ✅ Working |
 | `/api/v1/portfolio/metrics` | GET | Performance metrics | ✅ Working |
 | `/api/v1/portfolio/allocation` | GET | Position allocation | ✅ Working |
+| `/api/v1/ws/prices` | WebSocket | Real-time price feed | ✅ Working |
 | `/api/v1/market/pairs` | GET | List currency pairs | ⚠️ Stub |
 | `/api/v1/market/candles` | GET | Get OHLCV data | ⚠️ Stub (returns empty) |
 | `/api/v1/auth/google` | POST | Google OAuth verification | ❌ 501 Not Implemented |

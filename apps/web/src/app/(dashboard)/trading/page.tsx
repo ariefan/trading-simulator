@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { CandlestickChart } from '@/components/charts/candlestick-chart';
 import { formatCurrency } from '@/lib/utils';
+import { Wifi, WifiOff } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const WS_BASE_URL = API_BASE_URL.replace('http', 'ws');
 
 const CURRENCY_PAIRS = [
   { symbol: 'EURUSD', name: 'EUR/USD', basePrice: 1.0850 },
@@ -17,8 +19,8 @@ const CURRENCY_PAIRS = [
   { symbol: 'USDJPY', name: 'USD/JPY', basePrice: 149.50 },
   { symbol: 'USDCHF', name: 'USD/CHF', basePrice: 0.8750 },
   { symbol: 'AUDUSD', name: 'AUD/USD', basePrice: 0.6550 },
-  { symbol: 'USDCAD', name: 'USD/CAD', basePrice: 1.3550 },
-  { symbol: 'NZDUSD', name: 'NZD/USD', basePrice: 0.6150 },
+  { symbol: 'USDCAD', name: 'USD/CAD', basePrice: 1.3600 },
+  { symbol: 'NZDUSD', name: 'NZD/USD', basePrice: 0.6100 },
 ];
 
 interface Position {
@@ -36,10 +38,19 @@ interface Position {
   opened_at: string;
 }
 
+interface PriceData {
+  bid: number;
+  ask: number;
+  mid: number;
+  spread: number;
+  change: number;
+  changePercent: number;
+  timestamp: string;
+}
+
 interface PairPrice {
   symbol: string;
-  price: number;
-  change: number;
+  data: PriceData;
 }
 
 function generateMockCandles(symbol: string): Array<{
@@ -84,7 +95,7 @@ function generateMockCandles(symbol: string): Array<{
 export default function TradingPage() {
   const [selectedPair, setSelectedPair] = useState(CURRENCY_PAIRS[0]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [prices, setPrices] = useState<PairPrice[]>([]);
+  const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
   const [orderSize, setOrderSize] = useState('0.1');
@@ -93,6 +104,10 @@ export default function TradingPage() {
   const [takeProfit, setTakeProfit] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const chartData = useMemo(
     () => generateMockCandles(selectedPair.symbol),
@@ -100,6 +115,68 @@ export default function TradingPage() {
   );
 
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // WebSocket connection
+  useEffect(() => {
+    let mounted = true;
+
+    const connect = () => {
+      if (!mounted) return;
+
+      const ws = new WebSocket(`${WS_BASE_URL}/api/v1/ws/prices`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (!mounted) return;
+        setWsConnected(true);
+        // Subscribe to all currency pairs
+        ws.send(JSON.stringify({
+          action: 'subscribe',
+          symbols: CURRENCY_PAIRS.map(p => p.symbol),
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        if (!mounted) return;
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'price' && message.symbol && message.data) {
+            setPrices(prev => {
+              const newPrices = new Map(prev);
+              newPrices.set(message.symbol, message.data);
+              return newPrices;
+            });
+          }
+        } catch (err) {
+          console.error('Failed to parse WebSocket message:', err);
+        }
+      };
+
+      ws.onclose = () => {
+        if (!mounted) return;
+        setWsConnected(false);
+        // Attempt to reconnect after 3 seconds
+        reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        if (!mounted) return;
+        setWsConnected(false);
+      };
+    };
+
+    connect();
+
+    return () => {
+      mounted = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   // Fetch positions
   const fetchPositions = useCallback(async () => {
@@ -114,34 +191,17 @@ export default function TradingPage() {
     }
   }, []);
 
-  // Generate simulated prices
-  const updatePrices = useCallback(() => {
-    setPrices(
-      CURRENCY_PAIRS.map((pair) => {
-        const change = (Math.random() - 0.5) * 0.002;
-        return {
-          symbol: pair.symbol,
-          price: pair.basePrice + pair.basePrice * change,
-          change: pair.basePrice * change,
-        };
-      })
-    );
-  }, []);
-
   useEffect(() => {
     fetchPositions();
-    updatePrices();
 
     const positionInterval = setInterval(fetchPositions, 5000);
-    const priceInterval = setInterval(updatePrices, 2000);
     const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
 
     return () => {
       clearInterval(positionInterval);
-      clearInterval(priceInterval);
       clearInterval(timeInterval);
     };
-  }, [fetchPositions, updatePrices]);
+  }, [fetchPositions]);
 
   const totalPnl = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0);
 
@@ -200,13 +260,33 @@ export default function TradingPage() {
   };
 
   const getCurrentPrice = (symbol: string) => {
-    const priceData = prices.find((p) => p.symbol === symbol);
-    return priceData?.price || CURRENCY_PAIRS.find((p) => p.symbol === symbol)?.basePrice || 0;
+    const priceData = prices.get(symbol);
+    return priceData?.mid || CURRENCY_PAIRS.find((p) => p.symbol === symbol)?.basePrice || 0;
+  };
+
+  const getBidPrice = (symbol: string) => {
+    const priceData = prices.get(symbol);
+    return priceData?.bid || getCurrentPrice(symbol);
+  };
+
+  const getAskPrice = (symbol: string) => {
+    const priceData = prices.get(symbol);
+    return priceData?.ask || getCurrentPrice(symbol);
   };
 
   const getPriceChange = (symbol: string) => {
-    const priceData = prices.find((p) => p.symbol === symbol);
+    const priceData = prices.get(symbol);
     return priceData?.change || 0;
+  };
+
+  const getSpread = (symbol: string) => {
+    const priceData = prices.get(symbol);
+    return priceData?.spread || 0;
+  };
+
+  const formatPrice = (symbol: string, price: number) => {
+    const decimals = symbol.includes('JPY') ? 3 : 5;
+    return price.toFixed(decimals);
   };
 
   return (
@@ -218,9 +298,21 @@ export default function TradingPage() {
             Practice trading with virtual money
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Market Time (UTC)</p>
-          <p className="text-lg font-mono">{currentTime.toUTCString().slice(17, 25)}</p>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            {wsConnected ? (
+              <Wifi className="w-4 h-4 text-green-500" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-red-500" />
+            )}
+            <span className={`text-sm ${wsConnected ? 'text-green-500' : 'text-red-500'}`}>
+              {wsConnected ? 'Live' : 'Offline'}
+            </span>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Market Time (UTC)</p>
+            <p className="text-lg font-mono">{currentTime.toUTCString().slice(17, 25)}</p>
+          </div>
         </div>
       </div>
 
@@ -241,8 +333,10 @@ export default function TradingPage() {
           </CardHeader>
           <CardContent className="space-y-1 p-2">
             {CURRENCY_PAIRS.map((pair) => {
-              const price = getCurrentPrice(pair.symbol);
+              const bid = getBidPrice(pair.symbol);
+              const ask = getAskPrice(pair.symbol);
               const change = getPriceChange(pair.symbol);
+              const spread = getSpread(pair.symbol);
               return (
                 <button
                   key={pair.symbol}
@@ -253,16 +347,26 @@ export default function TradingPage() {
                       : 'hover:bg-muted'
                   }`}
                 >
-                  <span className="font-medium">{pair.name}</span>
+                  <div>
+                    <span className="font-medium">{pair.name}</span>
+                    <p className={`text-xs ${selectedPair.symbol === pair.symbol ? 'opacity-70' : 'text-muted-foreground'}`}>
+                      Spread: {spread.toFixed(1)} pips
+                    </p>
+                  </div>
                   <div className="text-right">
-                    <p className="font-mono text-sm">{price.toFixed(4)}</p>
+                    <div className="flex gap-2 text-xs font-mono">
+                      <span className="text-red-500">{formatPrice(pair.symbol, bid)}</span>
+                      <span className="text-green-500">{formatPrice(pair.symbol, ask)}</span>
+                    </div>
                     <p
                       className={`text-xs ${
-                        change >= 0 ? 'text-green-500' : 'text-red-500'
+                        change >= 0
+                          ? selectedPair.symbol === pair.symbol ? 'text-green-200' : 'text-green-500'
+                          : selectedPair.symbol === pair.symbol ? 'text-red-200' : 'text-red-500'
                       }`}
                     >
                       {change >= 0 ? '+' : ''}
-                      {change.toFixed(4)}
+                      {formatPrice(pair.symbol, change)}
                     </p>
                   </div>
                 </button>
@@ -305,6 +409,22 @@ export default function TradingPage() {
             <CardDescription>{selectedPair.name}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Live Price Display */}
+            <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-md">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Sell (Bid)</p>
+                <p className="text-lg font-mono text-red-500">
+                  {formatPrice(selectedPair.symbol, getBidPrice(selectedPair.symbol))}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Buy (Ask)</p>
+                <p className="text-lg font-mono text-green-500">
+                  {formatPrice(selectedPair.symbol, getAskPrice(selectedPair.symbol))}
+                </p>
+              </div>
+            </div>
+
             {/* Order Type */}
             <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-md">
               <Button
@@ -361,7 +481,7 @@ export default function TradingPage() {
                   id="limitPrice"
                   type="number"
                   step="0.0001"
-                  placeholder={getCurrentPrice(selectedPair.symbol).toFixed(4)}
+                  placeholder={formatPrice(selectedPair.symbol, getCurrentPrice(selectedPair.symbol))}
                   value={limitPrice}
                   onChange={(e) => setLimitPrice(e.target.value)}
                 />
@@ -465,8 +585,8 @@ export default function TradingPage() {
                         </span>
                       </td>
                       <td className="py-3">{position.size} lots</td>
-                      <td className="py-3 font-mono">{position.entry_price.toFixed(4)}</td>
-                      <td className="py-3 font-mono">{position.current_price.toFixed(4)}</td>
+                      <td className="py-3 font-mono">{formatPrice(position.symbol, position.entry_price)}</td>
+                      <td className="py-3 font-mono">{formatPrice(position.symbol, position.current_price)}</td>
                       <td
                         className={`py-3 text-right font-medium ${
                           position.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'
