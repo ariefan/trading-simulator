@@ -38,6 +38,13 @@
   - [x] `POST /api/v1/backtests/compare` - Compare vs Random & Buy-and-Hold
   - [x] `GET /api/v1/backtests/{id}` - Get results
 - [x] Celery backtest task (runs actual backtest engine)
+- [x] Custom strategy CRUD endpoints:
+  - [x] `GET /api/v1/strategies/` - List custom strategies
+  - [x] `POST /api/v1/strategies/` - Create strategy with code validation
+  - [x] `GET /api/v1/strategies/{id}` - Get strategy
+  - [x] `PUT /api/v1/strategies/{id}` - Update strategy
+  - [x] `DELETE /api/v1/strategies/{id}` - Delete strategy
+  - [x] `GET /api/v1/strategies/templates` - Get strategy templates
 
 ### Frontend (Completed)
 - [x] Candlestick chart component (TradingView Lightweight Charts)
@@ -49,10 +56,8 @@
 - [x] Frontend wired to actual backend API
 - [x] "Compare with Random & Buy-and-Hold" button
 - [x] Comparison results table with conclusion display
-
-### Remaining
-- [ ] Add strategy code editor for custom strategies
-- [ ] Implement custom strategy CRUD endpoints (currently return 501)
+- [x] Strategy code editor with templates
+- [x] Strategy CRUD UI (create, edit, delete, list)
 
 ---
 
@@ -133,9 +138,12 @@ pnpm --filter web dev
 | `/api/v1/backtests/` | POST | Run a backtest | ✅ Working |
 | `/api/v1/backtests/compare` | POST | Compare strategy vs Random & Buy-and-Hold | ✅ Working |
 | `/api/v1/backtests/{id}` | GET | Get backtest results | ✅ Working |
+| `/api/v1/strategies/` | GET | List custom strategies | ✅ Working |
+| `/api/v1/strategies/` | POST | Create custom strategy | ✅ Working |
+| `/api/v1/strategies/{id}` | GET/PUT/DELETE | Strategy CRUD | ✅ Working |
+| `/api/v1/strategies/templates` | GET | Get strategy templates | ✅ Working |
 | `/api/v1/market/pairs` | GET | List currency pairs | ⚠️ Stub |
 | `/api/v1/market/candles` | GET | Get OHLCV data | ⚠️ Stub (returns empty) |
-| `/api/v1/strategies/` | POST | Create custom strategy | ❌ 501 Not Implemented |
 | `/api/v1/auth/google` | POST | Google OAuth verification | ❌ 501 Not Implemented |
 | `/api/v1/users/me` | GET | Get current user | ❌ 401 (no auth) |
 
