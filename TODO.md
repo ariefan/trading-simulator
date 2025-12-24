@@ -145,9 +145,15 @@
 
 ## Infrastructure & Polish
 
-- [ ] Implement backend Google OAuth verification (auth.py returns 501)
-- [ ] Implement user profile endpoints (users.py returns 401)
-- [ ] Add real market data fetching (market.py returns empty data)
+### Completed
+- [x] JWT authentication with demo mode (`POST /api/v1/auth/demo`)
+- [x] Google OAuth endpoint (demo mode - accepts credentials)
+- [x] User profile endpoints (`GET/PATCH /api/v1/users/me`)
+- [x] User settings endpoints (`GET/PATCH /api/v1/users/me/settings`)
+- [x] Synthetic market data generation (candles with mean reversion)
+- [x] Market quotes endpoint (`GET /api/v1/market/quotes`)
+
+### Remaining
 - [ ] Add sample historical data download script
 - [ ] Create database seed script
 - [ ] Add unit tests for backtesting engine
@@ -207,10 +213,14 @@ pnpm --filter web dev
 | `/api/v1/signals/` | GET | Get all trading signals | ✅ Working |
 | `/api/v1/signals/{symbol}` | GET | Signal for symbol | ✅ Working |
 | `/api/v1/signals/{symbol}/analysis` | GET | Full analysis | ✅ Working |
-| `/api/v1/market/pairs` | GET | List currency pairs | ⚠️ Stub |
-| `/api/v1/market/candles` | GET | Get OHLCV data | ⚠️ Stub (returns empty) |
-| `/api/v1/auth/google` | POST | Google OAuth verification | ❌ 501 Not Implemented |
-| `/api/v1/users/me` | GET | Get current user | ❌ 401 (no auth) |
+| `/api/v1/market/pairs` | GET | List currency pairs | ✅ Working |
+| `/api/v1/market/candles/{symbol}` | GET | Get OHLCV data | ✅ Working (synthetic) |
+| `/api/v1/market/quotes` | GET | Get current quotes | ✅ Working |
+| `/api/v1/auth/demo` | POST | Demo authentication | ✅ Working |
+| `/api/v1/auth/google` | POST | Google OAuth | ✅ Working (demo mode) |
+| `/api/v1/auth/verify` | GET | Verify auth status | ✅ Working |
+| `/api/v1/users/me` | GET/PATCH | User profile | ✅ Working |
+| `/api/v1/users/me/settings` | GET/PATCH | User settings | ✅ Working |
 
 ---
 
