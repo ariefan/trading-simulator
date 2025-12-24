@@ -11,6 +11,7 @@ const navigation = [
   { name: 'Trading', href: '/trading', icon: '💹' },
   { name: 'Portfolio', href: '/portfolio', icon: '💼' },
   { name: 'History', href: '/history', icon: '📜' },
+  { name: 'AI Assistant', href: '/assistant', icon: '🤖' },
 ];
 
 const bottomNav = [

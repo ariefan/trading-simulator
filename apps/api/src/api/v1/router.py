@@ -1,6 +1,17 @@
 from fastapi import APIRouter
 
-from src.api.v1.endpoints import auth, backtests, market, portfolio, strategies, trading, users, websocket
+from src.api.v1.endpoints import (
+    ai_chat,
+    auth,
+    backtests,
+    market,
+    portfolio,
+    signals,
+    strategies,
+    trading,
+    users,
+    websocket,
+)
 
 api_router = APIRouter()
 
@@ -13,3 +24,5 @@ api_router.include_router(backtests.router, prefix="/backtests", tags=["Backtest
 api_router.include_router(trading.router, prefix="/trading", tags=["Paper Trading"])
 api_router.include_router(portfolio.router, prefix="/portfolio", tags=["Portfolio"])
 api_router.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
+api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI Assistant"])
+api_router.include_router(signals.router, prefix="/signals", tags=["Signals & Analysis"])
