@@ -153,13 +153,15 @@
 - [x] Synthetic market data generation (candles with mean reversion)
 - [x] Market quotes endpoint (`GET /api/v1/market/quotes`)
 
+### Completed
+- [x] Add sample historical data download script (`scripts/download_historical_data.py`)
+- [x] Create database seed script (`scripts/seed_database.py`)
+- [x] Add unit tests for backtesting engine (`tests/unit/`)
+- [x] Add integration tests for API (`tests/integration/`)
+- [x] CI/CD pipeline (`.github/workflows/ci.yml`)
+- [x] Production Docker configuration (`docker-compose.prod.yml`, updated Dockerfiles)
+
 ### Remaining
-- [ ] Add sample historical data download script
-- [ ] Create database seed script
-- [ ] Add unit tests for backtesting engine
-- [ ] Add integration tests for API
-- [ ] CI/CD pipeline
-- [ ] Production Docker configuration
 - [ ] Documentation site
 
 ---
