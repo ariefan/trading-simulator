@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { api, UserSettings, UserProfile } from '@/lib/api/client';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -18,11 +19,111 @@ export default function SettingsPage() {
     emailNotifications: true,
     tradeAlerts: true,
   });
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleSave = () => {
-    console.log('Saving settings:', settings);
-    // TODO: Save to backend
+  // Get token from localStorage
+  const getToken = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('auth_token');
+    }
+    return null;
   };
+
+  // Load settings from backend
+  useEffect(() => {
+    const loadData = async () => {
+      const token = getToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [userSettings, userProfile] = await Promise.all([
+          api.users.getSettings(token),
+          api.users.getProfile(token),
+        ]);
+
+        setSettings((prev) => ({
+          ...prev,
+          defaultLeverage: userSettings.default_leverage,
+          defaultLotSize: userSettings.default_lot_size,
+          theme: userSettings.theme,
+          emailNotifications: userSettings.notifications_enabled,
+          tradeAlerts: userSettings.notifications_enabled,
+        }));
+        setProfile(userProfile);
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const handleSave = async () => {
+    const token = getToken();
+    if (!token) {
+      setMessage({ type: 'error', text: 'Not authenticated. Please log in again.' });
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const userSettings: UserSettings = {
+        default_leverage: settings.defaultLeverage,
+        default_lot_size: settings.defaultLotSize,
+        theme: settings.theme,
+        notifications_enabled: settings.emailNotifications,
+      };
+
+      await api.users.updateSettings(token, userSettings);
+      setMessage({ type: 'success', text: 'Settings saved successfully!' });
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      setMessage({ type: 'error', text: 'Failed to save settings. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Are you sure you want to reset your paper trading account? This will reset your balance to $100,000 and clear all trade history.')) {
+      return;
+    }
+
+    setResetting(true);
+    setMessage(null);
+
+    try {
+      await api.trading.reset();
+      setMessage({ type: 'success', text: 'Account reset successfully! Your balance is now $100,000.' });
+    } catch (error) {
+      console.error('Failed to reset account:', error);
+      setMessage({ type: 'error', text: 'Failed to reset account. Please try again.' });
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div>
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -32,6 +133,18 @@ export default function SettingsPage() {
           Manage your trading preferences and account settings
         </p>
       </div>
+
+      {message && (
+        <div
+          className={`p-4 rounded-lg ${
+            message.type === 'success'
+              ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+              : 'bg-red-500/10 text-red-500 border border-red-500/20'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       {/* Trading Preferences */}
       <Card>
@@ -221,17 +334,22 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground">Signed in as</p>
-            <p className="font-medium">user@example.com</p>
+            <p className="font-medium">{profile?.email || 'Demo Account'}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Google Account
+              {profile?.name || 'Demo Trader'}
             </p>
           </div>
 
           <Separator />
 
           <div className="space-y-2">
-            <Button variant="outline" className="w-full">
-              Reset Paper Trading Account
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleReset}
+              disabled={resetting}
+            >
+              {resetting ? 'Resetting...' : 'Reset Paper Trading Account'}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
               This will reset your balance to $100,000 and clear all trade history
@@ -241,7 +359,9 @@ export default function SettingsPage() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave}>Save Changes</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
       </div>
     </div>
   );

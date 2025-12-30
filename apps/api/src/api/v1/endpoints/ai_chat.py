@@ -6,11 +6,84 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-# Import trading state for tools
-from src.api.v1.endpoints.trading import trading_state
-from src.api.v1.endpoints.portfolio import get_portfolio_summary, get_performance_metrics
-
 router = APIRouter()
+
+
+# ============================================================================
+# Trading State Access (avoid circular imports)
+# ============================================================================
+
+def _get_trading_state():
+    """Get trading state using function-level import to avoid circular dependency."""
+    from src.api.v1.endpoints.trading import _trading_state
+    return _trading_state
+
+
+def _get_portfolio_summary() -> dict[str, Any]:
+    """Get portfolio summary data."""
+    state = _get_trading_state()
+
+    # Calculate unrealized P&L from open positions
+    unrealized_pnl = 0.0
+    for pos in state.positions.values():
+        current_price = state.prices.get(pos["symbol"], pos["entry_price"])
+        if pos["side"] == "long":
+            pnl = (current_price - pos["entry_price"]) * pos["size"] * 100000
+        else:
+            pnl = (pos["entry_price"] - current_price) * pos["size"] * 100000
+        unrealized_pnl += pnl
+
+    # Calculate margin used
+    margin_used = sum(pos.get("margin_used", 0) for pos in state.positions.values())
+
+    equity = state.balance + unrealized_pnl
+    initial_balance = 100000.0
+    total_pnl = equity - initial_balance
+
+    return {
+        "balance": round(state.balance, 2),
+        "equity": round(equity, 2),
+        "margin": round(margin_used, 2),
+        "free_margin": round(equity - margin_used, 2),
+        "unrealized_pnl": round(unrealized_pnl, 2),
+        "total_pnl": round(total_pnl, 2),
+        "total_pnl_percent": round((total_pnl / initial_balance) * 100, 2),
+    }
+
+
+def _get_performance_metrics() -> dict[str, Any]:
+    """Get trading performance metrics."""
+    state = _get_trading_state()
+    trades = state.closed_trades
+
+    if not trades:
+        return {
+            "total_trades": 0,
+            "win_rate": 0.0,
+            "profit_factor": 0.0,
+            "average_win": 0.0,
+            "average_loss": 0.0,
+            "largest_win": 0.0,
+            "largest_loss": 0.0,
+            "max_drawdown": 0.0,
+        }
+
+    wins = [t for t in trades if t["pnl"] > 0]
+    losses = [t for t in trades if t["pnl"] < 0]
+
+    total_wins = sum(t["pnl"] for t in wins) if wins else 0
+    total_losses = abs(sum(t["pnl"] for t in losses)) if losses else 0
+
+    return {
+        "total_trades": len(trades),
+        "win_rate": (len(wins) / len(trades)) * 100 if trades else 0,
+        "profit_factor": total_wins / total_losses if total_losses > 0 else float('inf') if total_wins > 0 else 0,
+        "average_win": total_wins / len(wins) if wins else 0,
+        "average_loss": total_losses / len(losses) if losses else 0,
+        "largest_win": max(t["pnl"] for t in wins) if wins else 0,
+        "largest_loss": min(t["pnl"] for t in losses) if losses else 0,
+        "max_drawdown": 0.0,  # Would need equity curve tracking for real calculation
+    }
 
 
 # ============================================================================
@@ -49,14 +122,15 @@ class ToolResult(BaseModel):
 
 def tool_get_portfolio() -> dict[str, Any]:
     """Get the current portfolio summary."""
-    return get_portfolio_summary()
+    return _get_portfolio_summary()
 
 
 def tool_get_positions() -> list[dict[str, Any]]:
     """Get all open positions."""
+    state = _get_trading_state()
     positions = []
-    for pos_id, pos in trading_state.positions.items():
-        current_price = trading_state.prices.get(pos["symbol"], pos["entry_price"])
+    for pos_id, pos in state.positions.items():
+        current_price = state.prices.get(pos["symbol"], pos["entry_price"])
 
         # Calculate P&L
         if pos["side"] == "long":
@@ -80,13 +154,15 @@ def tool_get_positions() -> list[dict[str, Any]]:
 
 def tool_get_trade_history() -> list[dict[str, Any]]:
     """Get closed trade history."""
-    return trading_state.closed_trades[-20:]  # Last 20 trades
+    state = _get_trading_state()
+    return state.closed_trades[-20:]  # Last 20 trades
 
 
 def tool_get_market_prices() -> dict[str, dict[str, float]]:
     """Get current market prices for all pairs."""
+    state = _get_trading_state()
     result = {}
-    for symbol, price in trading_state.prices.items():
+    for symbol, price in state.prices.items():
         spread = price * 0.0001
         result[symbol] = {
             "bid": round(price - spread / 2, 5),
@@ -107,7 +183,9 @@ def tool_place_order(
     """Place a trading order."""
     import uuid
 
-    if symbol not in trading_state.prices:
+    state = _get_trading_state()
+
+    if symbol not in state.prices:
         return {"success": False, "error": f"Unknown symbol: {symbol}"}
 
     if side not in ["buy", "sell"]:
@@ -116,7 +194,7 @@ def tool_place_order(
     if size <= 0 or size > 10:
         return {"success": False, "error": "Size must be between 0.01 and 10 lots"}
 
-    price = trading_state.prices[symbol]
+    price = state.prices[symbol]
     spread = price * 0.0001
 
     # Adjust price for spread
@@ -129,14 +207,14 @@ def tool_place_order(
 
     # Calculate margin
     position_value = size * 100000 * entry_price
-    margin_required = position_value / trading_state.leverage
+    margin_required = position_value / state.leverage
 
-    if margin_required > trading_state.balance:
+    if margin_required > state.balance:
         return {"success": False, "error": "Insufficient margin"}
 
     # Create position
     position_id = str(uuid.uuid4())[:8]
-    trading_state.positions[position_id] = {
+    state.positions[position_id] = {
         "symbol": symbol,
         "side": position_side,
         "size": size,
@@ -160,11 +238,13 @@ def tool_place_order(
 
 def tool_close_position(position_id: str) -> dict[str, Any]:
     """Close an open position."""
-    if position_id not in trading_state.positions:
+    state = _get_trading_state()
+
+    if position_id not in state.positions:
         return {"success": False, "error": f"Position {position_id} not found"}
 
-    pos = trading_state.positions[position_id]
-    current_price = trading_state.prices.get(pos["symbol"], pos["entry_price"])
+    pos = state.positions[position_id]
+    current_price = state.prices.get(pos["symbol"], pos["entry_price"])
 
     # Calculate P&L
     if pos["side"] == "long":
@@ -173,10 +253,10 @@ def tool_close_position(position_id: str) -> dict[str, Any]:
         pnl = (pos["entry_price"] - current_price) * pos["size"] * 100000
 
     # Update balance
-    trading_state.balance += pnl
+    state.balance += pnl
 
     # Record closed trade
-    trading_state.closed_trades.append({
+    state.closed_trades.append({
         "id": position_id,
         "symbol": pos["symbol"],
         "side": pos["side"],
@@ -188,19 +268,19 @@ def tool_close_position(position_id: str) -> dict[str, Any]:
     })
 
     # Remove position
-    del trading_state.positions[position_id]
+    del state.positions[position_id]
 
     return {
         "success": True,
         "position_id": position_id,
         "pnl": round(pnl, 2),
-        "new_balance": round(trading_state.balance, 2),
+        "new_balance": round(state.balance, 2),
     }
 
 
 def tool_get_performance_metrics() -> dict[str, Any]:
     """Get trading performance metrics."""
-    return get_performance_metrics()
+    return _get_performance_metrics()
 
 
 def tool_calculate_position_size(
@@ -220,7 +300,8 @@ def tool_calculate_position_size(
     risk_amount = account_balance * (risk_percent / 100)
 
     # Pip value for standard lot (100,000 units)
-    pip_value = 10 if "JPY" not in symbol else 1000 / trading_state.prices.get(symbol, 100)
+    state = _get_trading_state()
+    pip_value = 10 if "JPY" not in symbol else 1000 / state.prices.get(symbol, 100)
 
     # Position size in lots
     position_size = risk_amount / (stop_loss_pips * pip_value)
@@ -423,7 +504,8 @@ def generate_ai_response(messages: list[ChatMessage], tools_context: str) -> str
         numbers = re.findall(r'\d+\.?\d*', last_message)
 
         if len(numbers) >= 2:
-            balance = float(numbers[0]) if float(numbers[0]) > 100 else trading_state.balance
+            state = _get_trading_state()
+            balance = float(numbers[0]) if float(numbers[0]) > 100 else state.balance
             risk_pct = float(numbers[1]) if float(numbers[1]) <= 10 else 1.0
             sl_pips = float(numbers[2]) if len(numbers) > 2 else 20
 

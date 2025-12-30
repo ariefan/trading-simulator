@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 import random
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException, status
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -272,7 +272,10 @@ async def get_currency_pair(symbol: str):
     for pair in CURRENCY_PAIRS:
         if pair.symbol == symbol:
             return pair
-    return {"error": f"Currency pair {symbol} not found"}
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Currency pair {symbol} not found",
+    )
 
 
 @router.get("/candles/{symbol}", response_model=CandlesResponse)

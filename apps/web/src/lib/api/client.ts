@@ -66,7 +66,19 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 export const api = {
   // Auth
   auth: {
-    me: () => request<User>('/api/v1/auth/me'),
+    verify: () => request<AuthVerifyResponse>('/api/v1/auth/verify'),
+    demo: (name?: string) => request<TokenResponse>('/api/v1/auth/demo', {
+      method: 'POST',
+      body: JSON.stringify({ name: name || 'Demo Trader' }),
+    }),
+    google: (credential: string) => request<TokenResponse>('/api/v1/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    }),
+    refresh: (token: string) => request<TokenResponse>('/api/v1/auth/refresh', {
+      headers: { Authorization: `Bearer ${token}` },
+      method: 'POST',
+    }),
     logout: () => request('/api/v1/auth/logout', { method: 'POST' }),
   },
 
@@ -141,6 +153,29 @@ export const api = {
       request(`/api/v1/trading/orders/${id}`, { method: 'DELETE' }),
     closePosition: (id: string) =>
       request(`/api/v1/trading/positions/${id}/close`, { method: 'POST' }),
+    reset: () => request('/api/v1/trading/reset', { method: 'POST' }),
+  },
+
+  // Users
+  users: {
+    getProfile: (token: string) => request<UserProfile>('/api/v1/users/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    updateProfile: (token: string, data: UpdateProfileRequest) =>
+      request<UserProfile>('/api/v1/users/me', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      }),
+    getSettings: (token: string) => request<UserSettings>('/api/v1/users/me/settings', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    updateSettings: (token: string, data: UserSettings) =>
+      request<UserSettings>('/api/v1/users/me/settings', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      }),
   },
 };
 
@@ -149,7 +184,19 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  image?: string;
+  picture?: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
+}
+
+export interface AuthVerifyResponse {
+  authenticated: boolean;
+  user: User | null;
 }
 
 export interface CurrencyPair {
@@ -320,6 +367,27 @@ export interface PlaceOrderRequest {
   price?: number;
   stopLoss?: number;
   takeProfit?: number;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  initial_balance: number;
+  created_at: string;
+}
+
+export interface UpdateProfileRequest {
+  name?: string;
+  picture?: string;
+}
+
+export interface UserSettings {
+  default_leverage: number;
+  default_lot_size: number;
+  theme: string;
+  notifications_enabled: boolean;
 }
 
 export { ApiError };
