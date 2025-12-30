@@ -273,3 +273,35 @@ STOCHASTIC = Indicators.STOCHASTIC
 ADX = Indicators.ADX
 OBV = Indicators.OBV
 VWAP = Indicators.VWAP
+
+
+def crossover(series1: pd.Series, series2: pd.Series) -> pd.Series:
+    """
+    Detect crossover events between two series.
+
+    Returns True when series1 crosses above series2.
+
+    Args:
+        series1: First series (e.g., fast MA)
+        series2: Second series (e.g., slow MA)
+
+    Returns:
+        Boolean series where True indicates a crossover event
+    """
+    return (series1 > series2) & (series1.shift(1) <= series2.shift(1))
+
+
+def crossunder(series1: pd.Series, series2: pd.Series) -> pd.Series:
+    """
+    Detect crossunder events between two series.
+
+    Returns True when series1 crosses below series2.
+
+    Args:
+        series1: First series (e.g., fast MA)
+        series2: Second series (e.g., slow MA)
+
+    Returns:
+        Boolean series where True indicates a crossunder event
+    """
+    return (series1 < series2) & (series1.shift(1) >= series2.shift(1))
