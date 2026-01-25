@@ -1,0 +1,15 @@
+{
+    "name": "api",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "uvicorn src.main:app --reload",
+        "start": "uvicorn src.main:app",
+        "test": "pytest",
+        "lint": "ruff check .",
+        "format": "ruff check --fix .",
+        "db:migrate": "alembic upgrade head",
+        "db:seed": "python scripts/seed_database.py",
+        "clean": "rm -rf __pycache__ .pytest_cache .coverage"
+    }
+}

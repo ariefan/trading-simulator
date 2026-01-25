@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { BarChart2, TrendingUp, LineChart } from 'lucide-react';
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -49,7 +50,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span className="text-2xl">📊</span>
+              <BarChart2 className="h-6 w-6 text-primary" />
               Backtesting
             </CardTitle>
             <CardDescription>
@@ -66,7 +67,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span className="text-2xl">💹</span>
+              <TrendingUp className="h-6 w-6 text-primary" />
               Paper Trading
             </CardTitle>
             <CardDescription>
@@ -85,7 +86,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span className="text-2xl">📈</span>
+              <LineChart className="h-6 w-6 text-primary" />
               Strategies
             </CardTitle>
             <CardDescription>
@@ -133,8 +134,8 @@ function StatCard({
     trend === 'up'
       ? 'text-green-600'
       : trend === 'down'
-      ? 'text-red-600'
-      : 'text-foreground';
+        ? 'text-red-600'
+        : 'text-foreground';
 
   return (
     <Card>

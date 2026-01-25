@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BacktestResults } from '@/components/backtesting/backtest-results';
+import { Trophy, BarChart2, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 
 const CURRENCY_PAIRS = [
@@ -16,6 +17,7 @@ const CURRENCY_PAIRS = [
   { value: 'AUDUSD', label: 'AUD/USD' },
   { value: 'USDCAD', label: 'USD/CAD' },
   { value: 'NZDUSD', label: 'NZD/USD' },
+  { value: 'XAUUSD', label: 'XAU/USD (Gold)' },
 ];
 
 const TIMEFRAMES = [
@@ -27,11 +29,12 @@ const TIMEFRAMES = [
   { value: '1D', label: '1 Day' },
 ];
 
-const STRATEGIES = [
-  { value: 'sma-crossover', label: 'SMA Crossover' },
-  { value: 'rsi-overbought', label: 'RSI Overbought/Oversold' },
-  { value: 'macd-signal', label: 'MACD Signal' },
-];
+interface StrategyInfo {
+  id: string;
+  name: string;
+  description: string;
+  parameters: any[];
+}
 
 interface BacktestConfig {
   strategy: string;
@@ -65,8 +68,10 @@ interface ComparisonResponse {
 }
 
 export default function BacktestingPage() {
+  const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [config, setConfig] = useState<BacktestConfig>({
-    strategy: 'sma-crossover',
+    strategy: '',
     symbol: 'EURUSD',
     timeframe: '1H',
     startDate: '2023-01-01',
@@ -80,6 +85,24 @@ export default function BacktestingPage() {
   const [results, setResults] = useState<any>(null);
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchStrategies();
+  }, []);
+
+  const fetchStrategies = async () => {
+    try {
+      const data = await api.backtests.getStrategies();
+      setStrategies(data);
+      if (data.length > 0) {
+        setConfig(prev => ({ ...prev, strategy: data[0].id }));
+      }
+    } catch (err: any) {
+      setError('Failed to load strategies. Please refresh the page.');
+    } finally {
+      setIsInitialLoading(false);
+    }
+  };
 
   const handleRunBacktest = async () => {
     setIsRunning(true);
@@ -195,18 +218,30 @@ export default function BacktestingPage() {
             {/* Strategy */}
             <div className="space-y-2">
               <Label htmlFor="strategy">Strategy</Label>
-              <select
-                id="strategy"
-                value={config.strategy}
-                onChange={(e) => setConfig({ ...config, strategy: e.target.value })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-              >
-                {STRATEGIES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="strategy"
+                  value={config.strategy}
+                  onChange={(e) => setConfig({ ...config, strategy: e.target.value })}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background disabled:opacity-50"
+                  disabled={isInitialLoading}
+                >
+                  {isInitialLoading ? (
+                    <option>Loading strategies...</option>
+                  ) : (
+                    strategies.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+                {isInitialLoading && (
+                  <div className="absolute right-3 top-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Symbol */}
@@ -351,22 +386,20 @@ export default function BacktestingPage() {
                       {comparison.results.map((result, idx) => (
                         <tr
                           key={result.strategy_id}
-                          className={`border-b ${
-                            result.strategy_id === config.strategy
-                              ? 'bg-primary/5 font-medium'
-                              : ''
-                          }`}
+                          className={`border-b ${result.strategy_id === config.strategy
+                            ? 'bg-primary/5 font-medium'
+                            : ''
+                            }`}
                         >
                           <td className="py-2">
-                            {idx === 0 && '🏆 '}
+                            {idx === 0 && <Trophy className="inline-block mr-1 h-4 w-4 text-yellow-500" />}
                             {result.strategy_name}
                           </td>
                           <td
-                            className={`text-right py-2 ${
-                              result.total_return_percent >= 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                            }`}
+                            className={`text-right py-2 ${result.total_return_percent >= 0
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                              }`}
                           >
                             {result.total_return_percent >= 0 ? '+' : ''}
                             {result.total_return_percent.toFixed(2)}%
@@ -389,11 +422,10 @@ export default function BacktestingPage() {
 
                 {/* Conclusion */}
                 <div
-                  className={`p-4 rounded-md ${
-                    comparison.conclusion.includes('LOST')
-                      ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                      : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                  }`}
+                  className={`p-4 rounded-md ${comparison.conclusion.includes('LOST')
+                    ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                    : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    }`}
                 >
                   <p className="font-medium mb-1">Reality Check</p>
                   <p className="text-sm">{comparison.conclusion}</p>
@@ -408,7 +440,7 @@ export default function BacktestingPage() {
           ) : !comparison ? (
             <Card className="h-full flex items-center justify-center min-h-[400px]">
               <CardContent className="text-center">
-                <div className="text-6xl mb-4">📊</div>
+                <BarChart2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-20" />
                 <h3 className="text-xl font-semibold mb-2">No Results Yet</h3>
                 <p className="text-muted-foreground">
                   Configure your backtest parameters and click "Run Backtest" to see results.

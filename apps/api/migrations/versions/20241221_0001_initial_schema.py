@@ -180,9 +180,9 @@ def upgrade() -> None:
     )
 
     # Convert candles to TimescaleDB hypertable
-    op.execute(
-        "SELECT create_hypertable('candles', 'time', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE)"
-    )
+    # op.execute(
+    #     "SELECT create_hypertable('candles', 'time', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE)"
+    # )
 
     # Seed currency pairs
     op.execute("""

@@ -149,6 +149,16 @@ CURRENCY_PAIRS = [
         max_leverage=100,
         is_active=True,
     ),
+    CurrencyPair(
+        symbol="XAUUSD",
+        base_currency="XAU",
+        quote_currency="USD",
+        pip_value=0.01,
+        min_lot_size=0.01,
+        max_lot_size=100.0,
+        max_leverage=100,
+        is_active=True,
+    ),
 ]
 
 # Base prices for synthetic data generation
@@ -163,6 +173,7 @@ BASE_PRICES = {
     "EURGBP": 0.8580,
     "EURJPY": 162.20,
     "GBPJPY": 189.10,
+    "XAUUSD": 2050.50,
 }
 
 # Timeframe in minutes

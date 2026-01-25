@@ -19,6 +19,7 @@ from src.services.backtest_service import (
     generate_sample_data,
     BUILTIN_STRATEGIES,
 )
+from src.services.strategy_service import strategy_service
 
 router = APIRouter()
 
@@ -130,11 +131,25 @@ class ComparisonResponse(BaseModel):
 @router.get("/strategies", response_model=list[StrategyInfo])
 async def list_strategies():
     """
-    List available built-in strategies.
+    List available strategies (built-in + custom).
 
     Includes the Random and Buy-and-Hold strategies for comparison.
     """
-    return backtest_service.get_available_strategies()
+    # Get built-in strategies
+    builtin_data = backtest_service.get_available_strategies()
+    strategies = [StrategyInfo(**s) for s in builtin_data]
+    
+    # Add custom user strategies
+    custom_strategies, _ = strategy_service.list_strategies(limit=100)
+    for s in custom_strategies:
+        strategies.append(StrategyInfo(
+            id=s["id"],
+            name=s["name"],
+            description=s["description"] or "User-defined strategy",
+            parameters=s["parameters"]
+        ))
+        
+    return strategies
 
 
 @router.post("/", response_model=BacktestResponse)
@@ -147,13 +162,19 @@ async def run_backtest(
 
     Returns full results including trades, equity curve, and metrics.
     """
-    # Validate strategy exists
+    custom_code = None
+    
+    # Validate strategy exists (either built-in or custom)
     if request.strategy_id not in BUILTIN_STRATEGIES:
-        available = list(BUILTIN_STRATEGIES.keys())
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown strategy: {request.strategy_id}. Available: {available}",
-        )
+        # Check if it's a custom strategy
+        custom_strategy = strategy_service.get_strategy(request.strategy_id)
+        if not custom_strategy:
+            available = list(BUILTIN_STRATEGIES.keys())
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown strategy: {request.strategy_id}. Available built-ins: {available}",
+            )
+        custom_code = custom_strategy["code"]
 
     # Parse and validate dates
     try:
@@ -195,6 +216,7 @@ async def run_backtest(
             initial_balance=request.initial_balance,
             leverage=request.leverage,
             parameters=request.parameters or None,
+            custom_code=custom_code,
         )
     except Exception as e:
         raise HTTPException(

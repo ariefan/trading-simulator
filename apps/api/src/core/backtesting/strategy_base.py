@@ -88,12 +88,16 @@ class Strategy(ABC):
     # Strategy parameters (override in subclass)
     # These can be optimized during backtesting
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self._data: Optional[pd.DataFrame] = None
         self._broker: Any = None
         self._current_bar: int = 0
         self._indicators: dict[str, np.ndarray] = {}
         self._orders: list[Order] = []
+        
+        for key, value in kwargs.items():
+            if hasattr(self, key) or True:  # Allow setting new attributes
+                setattr(self, key, value)
 
     @property
     def data(self) -> pd.DataFrame:

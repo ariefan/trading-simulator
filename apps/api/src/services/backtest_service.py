@@ -10,12 +10,28 @@ import numpy as np
 
 from src.core.backtesting.engine import BacktestEngine, BacktestResult
 from src.core.backtesting.strategy_base import Strategy
-from src.core.backtesting.indicators import SMA, EMA, RSI, MACD, crossover
+from src.core.backtesting.indicators import (
+    SMA, EMA, RSI, MACD, BOLLINGER_BANDS, 
+    ATR, STOCHASTIC, ADX, crossover, crossunder
+)
 
+
+from src.core.backtesting.strategies import (
+    SMACrossoverStrategy,
+    RSIOverboughtStrategy,
+    MACDSignalStrategy,
+    RandomStrategy,
+    BuyAndHoldStrategy,
+)
 
 # Built-in strategies registry
-BUILTIN_STRATEGIES: dict[str, type[Strategy]] = {}
-
+BUILTIN_STRATEGIES: dict[str, type[Strategy]] = {
+    "sma-crossover": SMACrossoverStrategy,
+    "rsi-overbought": RSIOverboughtStrategy,
+    "macd-signal": MACDSignalStrategy,
+    "random": RandomStrategy,
+    "buy-and-hold": BuyAndHoldStrategy,
+}
 
 def register_strategy(name: str):
     """Decorator to register a built-in strategy."""
@@ -24,129 +40,6 @@ def register_strategy(name: str):
         return cls
     return decorator
 
-
-@register_strategy("sma-crossover")
-class SMACrossoverStrategy(Strategy):
-    """Simple Moving Average Crossover Strategy."""
-
-    fast_period = 10
-    slow_period = 20
-
-    def init(self):
-        self.sma_fast = self.I(SMA, self.data["close"], self.fast_period)
-        self.sma_slow = self.I(SMA, self.data["close"], self.slow_period)
-
-    def next(self):
-        if len(self.sma_fast) < 2:
-            return
-
-        if crossover(self.sma_fast, self.sma_slow):
-            if self.position <= 0:
-                self.buy()
-        elif crossover(self.sma_slow, self.sma_fast):
-            if self.position >= 0:
-                self.sell()
-
-
-@register_strategy("rsi-overbought")
-class RSIOverboughtStrategy(Strategy):
-    """RSI Overbought/Oversold Strategy."""
-
-    rsi_period = 14
-    oversold = 30
-    overbought = 70
-
-    def init(self):
-        self.rsi = self.I(RSI, self.data["close"], self.rsi_period)
-
-    def next(self):
-        if len(self.rsi) < 1:
-            return
-
-        current_rsi = self.rsi.iloc[-1]
-
-        if current_rsi < self.oversold:
-            if self.position <= 0:
-                self.buy()
-        elif current_rsi > self.overbought:
-            if self.position >= 0:
-                self.sell()
-
-
-@register_strategy("macd-signal")
-class MACDSignalStrategy(Strategy):
-    """MACD Signal Line Crossover Strategy."""
-
-    fast_period = 12
-    slow_period = 26
-    signal_period = 9
-
-    def init(self):
-        macd_line, signal_line, histogram = MACD(
-            self.data["close"],
-            self.fast_period,
-            self.slow_period,
-            self.signal_period
-        )
-        self.macd = self.I(lambda x: macd_line, self.data["close"])
-        self.signal = self.I(lambda x: signal_line, self.data["close"])
-
-    def next(self):
-        if len(self.macd) < 2:
-            return
-
-        if crossover(self.macd, self.signal):
-            if self.position <= 0:
-                self.buy()
-        elif crossover(self.signal, self.macd):
-            if self.position >= 0:
-                self.sell()
-
-
-@register_strategy("random")
-class RandomStrategy(Strategy):
-    """
-    Random Strategy - buys and sells on coin flips.
-
-    This is the control group. If your fancy TA strategy can't beat
-    random chance, it's not actually working.
-    """
-
-    trade_probability = 0.02  # 2% chance to trade each bar
-    seed = 42
-
-    def init(self):
-        np.random.seed(self.seed)
-        self.random_values = np.random.random(len(self.data))
-
-    def next(self):
-        idx = self._current_bar
-
-        if self.random_values[idx] < self.trade_probability:
-            # Coin flip for direction
-            if np.random.random() > 0.5:
-                if self.position <= 0:
-                    self.buy()
-            else:
-                if self.position >= 0:
-                    self.sell()
-
-
-@register_strategy("buy-and-hold")
-class BuyAndHoldStrategy(Strategy):
-    """
-    Buy and Hold Strategy - the benchmark.
-
-    Buys on the first bar and holds until the end.
-    Most active strategies fail to beat this.
-    """
-
-    def init(self):
-        pass
-
-    def next(self):
-        if self._current_bar == 0:
-            self.buy()
 
 
 class BacktestService:
@@ -182,6 +75,55 @@ class BacktestService:
                     })
         return params
 
+    def _load_custom_strategy(self, code: str) -> type[Strategy]:
+        """
+        Dynamically load a strategy class from Python code.
+        
+        Args:
+            code: Python code string defining the strategy class
+            
+        Returns:
+            The first class found in the code that inherits from Strategy
+        """
+        # Prepare execution context with all indicators and base class
+        globals_dict = {
+            "Strategy": Strategy,
+            "SMA": SMA,
+            "EMA": EMA,
+            "RSI": RSI,
+            "MACD": MACD,
+            "BOLLINGER_BANDS": BOLLINGER_BANDS,
+            "ATR": ATR,
+            "STOCHASTIC": STOCHASTIC,
+            "ADX": ADX,
+            "crossover": crossover,
+            "crossunder": crossunder,
+            "pd": pd,
+            "np": np,
+        }
+        
+        # Execute the code
+        try:
+            exec(code, globals_dict)
+        except Exception as e:
+            raise ValueError(f"Failed to execute strategy code: {str(e)}")
+            
+        # Find the strategy class
+        strategy_class = None
+        for item in globals_dict.values():
+            if (
+                isinstance(item, type) 
+                and issubclass(item, Strategy) 
+                and item is not Strategy
+            ):
+                strategy_class = item
+                break
+                
+        if not strategy_class:
+            raise ValueError("No class inheriting from Strategy found in code")
+            
+        return strategy_class
+
     def run_backtest(
         self,
         strategy_id: str,
@@ -191,27 +133,31 @@ class BacktestService:
         initial_balance: float = 100_000.0,
         leverage: int = 100,
         parameters: Optional[dict[str, Any]] = None,
+        custom_code: Optional[str] = None,
     ) -> BacktestResult:
         """
         Run a backtest synchronously.
 
         Args:
-            strategy_id: Built-in strategy ID or 'custom'
+            strategy_id: Built-in strategy ID or unique ID for custom
             data: OHLCV DataFrame
             symbol: Currency pair symbol
             timeframe: Timeframe string
             initial_balance: Starting balance
             leverage: Leverage ratio
             parameters: Strategy parameter overrides
+            custom_code: Optional Python code for custom strategies
 
         Returns:
             BacktestResult with full results
         """
         # Get strategy class
-        if strategy_id not in BUILTIN_STRATEGIES:
+        if custom_code:
+            strategy_class = self._load_custom_strategy(custom_code)
+        elif strategy_id in BUILTIN_STRATEGIES:
+            strategy_class = BUILTIN_STRATEGIES[strategy_id]
+        else:
             raise ValueError(f"Unknown strategy: {strategy_id}")
-
-        strategy_class = BUILTIN_STRATEGIES[strategy_id]
 
         # Configure engine
         self.engine.initial_balance = initial_balance
@@ -286,6 +232,7 @@ def generate_sample_data(
         "USDJPY": 149.0,
         "USDCHF": 0.88,
         "AUDUSD": 0.65,
+        "XAUUSD": 2050.0,
     }
     base_price = base_prices.get(symbol, 1.0)
 

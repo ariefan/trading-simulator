@@ -125,6 +125,7 @@ export const api = {
           parameters: {},
         }),
       }),
+    getStrategies: () => request<any[]>('/api/v1/backtests/strategies'),
     getStatus: (id: string) =>
       request<BacktestStatus>(`/api/v1/backtests/${id}/status`),
     getResults: (id: string) =>

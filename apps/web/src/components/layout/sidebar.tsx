@@ -3,20 +3,38 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import {
+  Home,
+  BarChart2,
+  LineChart,
+  TrendingUp,
+  Briefcase,
+  ScrollText,
+  Bot,
+  Settings,
+  CircleHelp,
+  type LucideIcon,
+} from 'lucide-react';
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: '🏠' },
-  { name: 'Backtesting', href: '/backtesting', icon: '📊' },
-  { name: 'Strategies', href: '/strategies', icon: '📈' },
-  { name: 'Trading', href: '/trading', icon: '💹' },
-  { name: 'Portfolio', href: '/portfolio', icon: '💼' },
-  { name: 'History', href: '/history', icon: '📜' },
-  { name: 'AI Assistant', href: '/assistant', icon: '🤖' },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+}
+
+const navigation: NavItem[] = [
+  { name: 'Dashboard', href: '/dashboard', icon: Home },
+  { name: 'Backtesting', href: '/backtesting', icon: BarChart2 },
+  { name: 'Strategies', href: '/strategies', icon: LineChart },
+  { name: 'Trading', href: '/trading', icon: TrendingUp },
+  { name: 'Portfolio', href: '/portfolio', icon: Briefcase },
+  { name: 'History', href: '/history', icon: ScrollText },
+  { name: 'AI Assistant', href: '/assistant', icon: Bot },
 ];
 
-const bottomNav = [
-  { name: 'Settings', href: '/settings', icon: '⚙️' },
-  { name: 'Help', href: '/help', icon: '❓' },
+const bottomNav: NavItem[] = [
+  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Help', href: '/help', icon: CircleHelp },
 ];
 
 export function Sidebar() {
@@ -28,7 +46,7 @@ export function Sidebar() {
         {/* Logo */}
         <div className="flex items-center flex-shrink-0 px-4 mb-5">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="text-2xl">📈</span>
+            <TrendingUp className="h-6 w-6 text-primary" />
             <span className="font-bold text-lg">Forex Simulator</span>
           </Link>
         </div>
@@ -37,6 +55,7 @@ export function Sidebar() {
         <nav className="flex-1 px-2 space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+            const Icon = item.icon;
             return (
               <Link
                 key={item.name}
@@ -48,7 +67,7 @@ export function Sidebar() {
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                <span className="mr-3 text-lg">{item.icon}</span>
+                <Icon className="mr-3 h-5 w-5" />
                 {item.name}
               </Link>
             );
@@ -59,6 +78,7 @@ export function Sidebar() {
         <div className="flex-shrink-0 border-t p-2">
           {bottomNav.map((item) => {
             const isActive = pathname === item.href;
+            const Icon = item.icon;
             return (
               <Link
                 key={item.name}
@@ -70,7 +90,7 @@ export function Sidebar() {
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                <span className="mr-3 text-lg">{item.icon}</span>
+                <Icon className="mr-3 h-5 w-5" />
                 {item.name}
               </Link>
             );

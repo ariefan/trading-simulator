@@ -21,6 +21,7 @@ const CURRENCY_PAIRS = [
   { symbol: 'AUDUSD', name: 'AUD/USD', basePrice: 0.6550 },
   { symbol: 'USDCAD', name: 'USD/CAD', basePrice: 1.3600 },
   { symbol: 'NZDUSD', name: 'NZD/USD', basePrice: 0.6100 },
+  { symbol: 'XAUUSD', name: 'XAU/USD (Gold)', basePrice: 2050.50 },
 ];
 
 interface Position {
@@ -285,7 +286,9 @@ export default function TradingPage() {
   };
 
   const formatPrice = (symbol: string, price: number) => {
-    const decimals = symbol.includes('JPY') ? 3 : 5;
+    const isJpy = symbol.includes('JPY');
+    const isGold = symbol.includes('XAU');
+    const decimals = (isJpy || isGold) ? 3 : 5;
     return price.toFixed(decimals);
   };
 
@@ -341,11 +344,10 @@ export default function TradingPage() {
                 <button
                   key={pair.symbol}
                   onClick={() => setSelectedPair(pair)}
-                  className={`w-full flex items-center justify-between p-2 rounded-md transition-colors ${
-                    selectedPair.symbol === pair.symbol
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted'
-                  }`}
+                  className={`w-full flex items-center justify-between p-2 rounded-md transition-colors ${selectedPair.symbol === pair.symbol
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted'
+                    }`}
                 >
                   <div>
                     <span className="font-medium">{pair.name}</span>
@@ -359,11 +361,10 @@ export default function TradingPage() {
                       <span className="text-green-500">{formatPrice(pair.symbol, ask)}</span>
                     </div>
                     <p
-                      className={`text-xs ${
-                        change >= 0
-                          ? selectedPair.symbol === pair.symbol ? 'text-green-200' : 'text-green-500'
-                          : selectedPair.symbol === pair.symbol ? 'text-red-200' : 'text-red-500'
-                      }`}
+                      className={`text-xs ${change >= 0
+                        ? selectedPair.symbol === pair.symbol ? 'text-green-200' : 'text-green-500'
+                        : selectedPair.symbol === pair.symbol ? 'text-red-200' : 'text-red-500'
+                        }`}
                     >
                       {change >= 0 ? '+' : ''}
                       {formatPrice(pair.symbol, change)}
@@ -480,7 +481,7 @@ export default function TradingPage() {
                 <Input
                   id="limitPrice"
                   type="number"
-                  step="0.0001"
+                  step={selectedPair.symbol.includes('JPY') || selectedPair.symbol.includes('XAU') ? "0.01" : "0.0001"}
                   placeholder={formatPrice(selectedPair.symbol, getCurrentPrice(selectedPair.symbol))}
                   value={limitPrice}
                   onChange={(e) => setLimitPrice(e.target.value)}
@@ -496,7 +497,7 @@ export default function TradingPage() {
               <Input
                 id="stopLoss"
                 type="number"
-                step="0.0001"
+                step={selectedPair.symbol.includes('JPY') || selectedPair.symbol.includes('XAU') ? "0.01" : "0.0001"}
                 placeholder="0.0000"
                 value={stopLoss}
                 onChange={(e) => setStopLoss(e.target.value)}
@@ -509,7 +510,7 @@ export default function TradingPage() {
               <Input
                 id="takeProfit"
                 type="number"
-                step="0.0001"
+                step={selectedPair.symbol.includes('JPY') || selectedPair.symbol.includes('XAU') ? "0.01" : "0.0001"}
                 placeholder="0.0000"
                 value={takeProfit}
                 onChange={(e) => setTakeProfit(e.target.value)}
@@ -517,11 +518,10 @@ export default function TradingPage() {
             </div>
 
             <Button
-              className={`w-full ${
-                orderSide === 'buy'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-red-600 hover:bg-red-700'
-              }`}
+              className={`w-full ${orderSide === 'buy'
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-red-600 hover:bg-red-700'
+                }`}
               onClick={handlePlaceOrder}
               disabled={isLoading}
             >
@@ -544,9 +544,8 @@ export default function TradingPage() {
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Total P&L</p>
               <p
-                className={`text-xl font-bold ${
-                  totalPnl >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}
+                className={`text-xl font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}
               >
                 {totalPnl >= 0 ? '+' : ''}
                 {formatCurrency(totalPnl)}
@@ -575,11 +574,10 @@ export default function TradingPage() {
                       <td className="py-3 font-medium">{position.symbol}</td>
                       <td className="py-3">
                         <span
-                          className={`px-2 py-0.5 text-xs rounded ${
-                            position.side === 'long'
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                          }`}
+                          className={`px-2 py-0.5 text-xs rounded ${position.side === 'long'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                            }`}
                         >
                           {position.side.toUpperCase()}
                         </span>
@@ -588,9 +586,8 @@ export default function TradingPage() {
                       <td className="py-3 font-mono">{formatPrice(position.symbol, position.entry_price)}</td>
                       <td className="py-3 font-mono">{formatPrice(position.symbol, position.current_price)}</td>
                       <td
-                        className={`py-3 text-right font-medium ${
-                          position.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}
+                        className={`py-3 text-right font-medium ${position.unrealized_pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}
                       >
                         {position.unrealized_pnl >= 0 ? '+' : ''}
                         {formatCurrency(position.unrealized_pnl)}

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LineChart, Code2 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -445,7 +446,7 @@ export default function StrategiesPage() {
       {strategies.length === 0 && !isCreating && (
         <Card className="py-12">
           <CardContent className="text-center">
-            <div className="text-6xl mb-4">📈</div>
+            <LineChart className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-20" />
             <h3 className="text-xl font-semibold mb-2">No Strategies Yet</h3>
             <p className="text-muted-foreground mb-4">
               Create your first custom trading strategy to get started

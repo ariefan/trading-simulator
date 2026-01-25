@@ -9,6 +9,9 @@ import {
   CandlestickData,
   Time,
   CrosshairMode,
+  CandlestickSeries,
+  HistogramSeries,
+  AreaSeries,
 } from 'lightweight-charts';
 
 interface CandleData {
@@ -44,8 +47,8 @@ export function CandlestickChart({
 }: CandlestickChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const candlestickSeriesRef = useRef<any>(null);
+  const volumeSeriesRef = useRef<any>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
 
   const colors = {
@@ -116,7 +119,7 @@ export function CandlestickChart({
     chartRef.current = chart;
 
     // Create candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: currentColors.upColor,
       downColor: currentColors.downColor,
       wickUpColor: currentColors.wickUpColor,
@@ -128,7 +131,7 @@ export function CandlestickChart({
 
     // Create volume series if enabled
     if (showVolume) {
-      const volumeSeries = chart.addHistogramSeries({
+      const volumeSeries = chart.addSeries(HistogramSeries, {
         priceFormat: {
           type: 'volume',
         },
@@ -179,7 +182,7 @@ export function CandlestickChart({
     if (!candlestickSeriesRef.current || !data.length) return;
 
     const formattedData: CandlestickData[] = data.map((d) => ({
-      time: d.time as Time,
+      time: (new Date(d.time).getTime() / 1000) as Time,
       open: d.open,
       high: d.high,
       low: d.low,
@@ -191,7 +194,7 @@ export function CandlestickChart({
     // Update volume data if available
     if (volumeSeriesRef.current && showVolume) {
       const volumeData = data.map((d) => ({
-        time: d.time as Time,
+        time: (new Date(d.time).getTime() / 1000) as Time,
         value: d.volume || 0,
         color: d.close >= d.open
           ? colors[theme].volumeUpColor
@@ -210,7 +213,7 @@ export function CandlestickChart({
     if (!candlestickSeriesRef.current || !trades.length) return;
 
     const markers = trades.map((trade) => ({
-      time: trade.time as Time,
+      time: (new Date(trade.time).getTime() / 1000) as Time,
       position: trade.side === 'long' ? 'belowBar' : 'aboveBar',
       color: trade.type === 'entry'
         ? (trade.side === 'long' ? '#22c55e' : '#ef4444')
@@ -224,7 +227,7 @@ export function CandlestickChart({
       size: 1,
     }));
 
-    candlestickSeriesRef.current.setMarkers(markers as any);
+    candlestickSeriesRef.current.setMarkers(markers);
   }, [trades]);
 
   return (
@@ -273,7 +276,7 @@ export function MiniChart({ data, height = 60, isPositive = true }: MiniChartPro
       height: height,
     });
 
-    const lineSeries = chart.addAreaSeries({
+    const lineSeries = chart.addSeries(AreaSeries, {
       topColor: isPositive ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)',
       bottomColor: isPositive ? 'rgba(34, 197, 94, 0)' : 'rgba(239, 68, 68, 0)',
       lineColor: isPositive ? '#22c55e' : '#ef4444',
@@ -281,7 +284,7 @@ export function MiniChart({ data, height = 60, isPositive = true }: MiniChartPro
     });
 
     const lineData = data.map((d) => ({
-      time: d.time as Time,
+      time: (new Date(d.time).getTime() / 1000) as Time,
       value: d.close,
     }));
 

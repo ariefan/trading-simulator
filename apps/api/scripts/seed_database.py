@@ -338,6 +338,8 @@ def main():
         print("=" * 60)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error: {e}")
         print()
         print("Make sure the database is running and the tables exist.")

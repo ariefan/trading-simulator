@@ -349,7 +349,7 @@ class BacktestEngine:
         start_time = time.time()
 
         # Determine pip value based on symbol
-        pip_value = 0.01 if "JPY" in symbol else 0.0001
+        pip_value = 0.01 if "JPY" in symbol or "XAU" in symbol else 0.0001
 
         # Initialize strategy
         strategy = strategy_class()

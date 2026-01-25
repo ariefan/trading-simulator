@@ -8,11 +8,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_db
+from src.services.strategy_service import strategy_service
 
 router = APIRouter()
-
-# In-memory storage for demo (replace with database in production)
-_strategies_store: dict[str, dict] = {}
 
 
 class StrategyParameter(BaseModel):
@@ -62,8 +60,7 @@ class StrategyList(BaseModel):
     strategies: list[StrategyResponse]
     total: int
 
-
-# Strategy templates
+# Built-in strategy templates
 STRATEGY_TEMPLATES = [
     {
         "name": "SMA Crossover",
@@ -94,8 +91,8 @@ STRATEGY_TEMPLATES = [
                 self.sell()
 ''',
         "parameters": [
-            {"name": "fast_period", "type": "int", "default": 10, "min": 2, "max": 50, "description": "Fast SMA period"},
-            {"name": "slow_period", "type": "int", "default": 20, "min": 10, "max": 200, "description": "Slow SMA period"},
+            {"name": "fast_period", "type": "int", "default": 10, "description": "Fast SMA period"},
+            {"name": "slow_period", "type": "int", "default": 20, "description": "Slow SMA period"},
         ],
     },
     {
@@ -122,9 +119,9 @@ STRATEGY_TEMPLATES = [
                 self.sell()
 ''',
         "parameters": [
-            {"name": "rsi_period", "type": "int", "default": 14, "min": 5, "max": 50, "description": "RSI period"},
-            {"name": "oversold", "type": "int", "default": 30, "min": 10, "max": 40, "description": "Oversold level"},
-            {"name": "overbought", "type": "int", "default": 70, "min": 60, "max": 90, "description": "Overbought level"},
+            {"name": "rsi_period", "type": "int", "default": 14, "description": "RSI period"},
+            {"name": "oversold", "type": "int", "default": 30, "description": "Oversold level"},
+            {"name": "overbought", "type": "int", "default": 70, "description": "Overbought level"},
         ],
     },
     {
@@ -153,43 +150,9 @@ STRATEGY_TEMPLATES = [
                 self.sell()
 ''',
         "parameters": [
-            {"name": "fast_period", "type": "int", "default": 12, "min": 5, "max": 20, "description": "Fast EMA period"},
-            {"name": "slow_period", "type": "int", "default": 26, "min": 15, "max": 50, "description": "Slow EMA period"},
-            {"name": "signal_period", "type": "int", "default": 9, "min": 5, "max": 15, "description": "Signal line period"},
-        ],
-    },
-    {
-        "name": "Bollinger Bands Breakout",
-        "description": "Buy when price breaks above upper band, sell when it breaks below lower band",
-        "code": '''class BollingerBreakout(Strategy):
-    """Bollinger Bands Breakout Strategy."""
-
-    period = 20
-    std_dev = 2.0
-
-    def init(self):
-        """Initialize indicators."""
-        bb = self.I(BOLLINGER_BANDS, self.data['close'], self.period, self.std_dev)
-        self.upper = bb['upper']
-        self.lower = bb['lower']
-        self.middle = bb['middle']
-
-    def next(self):
-        """Execute on each bar."""
-        close = self.data['close'].iloc[-1]
-
-        # Buy when price breaks above upper band
-        if close > self.upper[-1]:
-            if not self.position:
-                self.buy()
-        # Sell when price breaks below lower band
-        elif close < self.lower[-1]:
-            if self.position:
-                self.sell()
-''',
-        "parameters": [
-            {"name": "period", "type": "int", "default": 20, "min": 10, "max": 50, "description": "Bollinger period"},
-            {"name": "std_dev", "type": "float", "default": 2.0, "min": 1.0, "max": 3.0, "description": "Standard deviations"},
+            {"name": "fast_period", "type": "int", "default": 12, "description": "Fast EMA period"},
+            {"name": "slow_period", "type": "int", "default": 26, "description": "Slow EMA period"},
+            {"name": "signal_period", "type": "int", "default": 9, "description": "Signal line period"},
         ],
     },
 ]
@@ -232,13 +195,11 @@ async def list_strategies(
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
 ):
-    """List all strategies."""
-    strategies = list(_strategies_store.values())
-    strategies.sort(key=lambda x: x["created_at"], reverse=True)
-
+    """List all user-created strategies."""
+    strategies, total = strategy_service.list_strategies(skip, limit)
     return StrategyList(
-        strategies=[StrategyResponse(**s) for s in strategies[skip:skip + limit]],
-        total=len(strategies),
+        strategies=[StrategyResponse(**s) for s in strategies],
+        total=total,
     )
 
 
@@ -256,21 +217,13 @@ async def create_strategy(
             detail=f"Invalid strategy code: {error}",
         )
 
-    # Create strategy
-    now = datetime.now().isoformat()
-    strategy_id = str(uuid.uuid4())
-
-    strategy_data = {
-        "id": strategy_id,
-        "name": strategy.name,
-        "description": strategy.description,
-        "code": strategy.code,
-        "parameters": [p.model_dump() for p in strategy.parameters],
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    _strategies_store[strategy_id] = strategy_data
+    # Create strategy via service
+    strategy_data = strategy_service.create_strategy(
+        name=strategy.name,
+        description=strategy.description,
+        code=strategy.code,
+        parameters=[p.model_dump() for p in strategy.parameters]
+    )
 
     return StrategyResponse(**strategy_data)
 
@@ -287,30 +240,23 @@ async def get_strategy(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific strategy by ID."""
-    if strategy_id not in _strategies_store:
+    strategy_data = strategy_service.get_strategy(strategy_id)
+    if not strategy_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Strategy {strategy_id} not found",
         )
 
-    return StrategyResponse(**_strategies_store[strategy_id])
+    return StrategyResponse(**strategy_data)
 
 
 @router.put("/{strategy_id}", response_model=StrategyResponse)
-async def update_strategy(
+async def update_strategy_endpoint(
     strategy_id: str,
     strategy: StrategyUpdate,
     db: AsyncSession = Depends(get_db),
 ):
     """Update a strategy."""
-    if strategy_id not in _strategies_store:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Strategy {strategy_id} not found",
-        )
-
-    existing = _strategies_store[strategy_id]
-
     # Validate code if provided
     if strategy.code is not None:
         is_valid, error = validate_strategy_code(strategy.code)
@@ -319,30 +265,35 @@ async def update_strategy(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid strategy code: {error}",
             )
-        existing["code"] = strategy.code
 
+    updates = {}
     if strategy.name is not None:
-        existing["name"] = strategy.name
+        updates["name"] = strategy.name
     if strategy.description is not None:
-        existing["description"] = strategy.description
+        updates["description"] = strategy.description
+    if strategy.code is not None:
+        updates["code"] = strategy.code
     if strategy.parameters is not None:
-        existing["parameters"] = [p.model_dump() for p in strategy.parameters]
+        updates["parameters"] = [p.model_dump() for p in strategy.parameters]
 
-    existing["updated_at"] = datetime.now().isoformat()
-
-    return StrategyResponse(**existing)
-
-
-@router.delete("/{strategy_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_strategy(
-    strategy_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """Delete a strategy."""
-    if strategy_id not in _strategies_store:
+    updated = strategy_service.update_strategy(strategy_id, updates)
+    if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Strategy {strategy_id} not found",
         )
 
-    del _strategies_store[strategy_id]
+    return StrategyResponse(**updated)
+
+
+@router.delete("/{strategy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_strategy_endpoint(
+    strategy_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a strategy."""
+    if not strategy_service.delete_strategy(strategy_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Strategy {strategy_id} not found",
+        )

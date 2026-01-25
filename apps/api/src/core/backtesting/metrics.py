@@ -80,6 +80,15 @@ class PerformanceMetrics:
             "exposure_time": self._exposure_time(equity_df),
         }
 
+        # Sanitize for JSON compliance (replace inf/nan with 0.0)
+        return self._sanitize_metrics(metrics)
+
+    def _sanitize_metrics(self, metrics: dict[str, Any]) -> dict[str, Any]:
+        """Replace non-JSON compliant floats (inf, nan) with 0.0."""
+        for key, value in metrics.items():
+            if isinstance(value, float):
+                if np.isinf(value) or np.isnan(value):
+                    metrics[key] = 0.0
         return metrics
 
     def _total_return(self, equity_df: pd.DataFrame, initial_balance: float) -> float:

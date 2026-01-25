@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { BarChart2, TrendingUp, Bot } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -53,17 +54,17 @@ export default function Home() {
               <FeatureCard
                 title="Backtesting Engine"
                 description="Test your trading strategies on years of historical forex data. See exactly how your strategy would have performed."
-                icon="📊"
+                icon={<BarChart2 className="h-10 w-10 text-primary" />}
               />
               <FeatureCard
                 title="Paper Trading"
                 description="Trade with virtual money in real-time market conditions. No risk, all the learning experience."
-                icon="💹"
+                icon={<TrendingUp className="h-10 w-10 text-primary" />}
               />
               <FeatureCard
                 title="AI Insights"
                 description="Get AI-powered analysis, pattern recognition, and trading signals to enhance your learning."
-                icon="🤖"
+                icon={<Bot className="h-10 w-10 text-primary" />}
               />
             </div>
           </div>
@@ -102,11 +103,11 @@ function FeatureCard({
 }: {
   title: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg border bg-card p-6 text-card-foreground shadow-sm">
-      <div className="mb-4 text-4xl">{icon}</div>
+      <div className="mb-4">{icon}</div>
       <h3 className="mb-2 text-xl font-semibold">{title}</h3>
       <p className="text-muted-foreground">{description}</p>
     </div>
